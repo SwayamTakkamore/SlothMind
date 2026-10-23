@@ -36,6 +36,84 @@ export function aiRouter(session: VaultSession): Router {
     }
   }));
 
+  router.post('/models/activate', asyncHandler(async (req, res) => {
+    try {
+      const { model_id } = req.body;
+      if (!model_id || typeof model_id !== 'string') {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_INPUT',
+            message: '"model_id" is required and must be a string.',
+          },
+        });
+      }
+      const result = await hfService.activateModel(model_id);
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Model activation failed';
+      res.status(503).json({
+        error: {
+          code: 'AI_SERVICE_UNAVAILABLE',
+          message,
+        },
+      });
+    }
+  }));
+
+  router.post('/models/unload', asyncHandler(async (_req, res) => {
+    try {
+      const result = await hfService.unloadModel();
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Model unload failed';
+      res.status(503).json({
+        error: {
+          code: 'AI_SERVICE_UNAVAILABLE',
+          message,
+        },
+      });
+    }
+  }));
+
+  router.post('/models/download', asyncHandler(async (req, res) => {
+    try {
+      const { model_id } = req.body;
+      if (!model_id || typeof model_id !== 'string') {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_INPUT',
+            message: '"model_id" is required and must be a string.',
+          },
+        });
+      }
+      const result = await hfService.downloadModel(model_id);
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download initiation failed';
+      res.status(503).json({
+        error: {
+          code: 'AI_SERVICE_UNAVAILABLE',
+          message,
+        },
+      });
+    }
+  }));
+
+  router.get('/models/download-status', asyncHandler(async (_req, res) => {
+    try {
+      const status = await hfService.getDownloadStatus();
+      res.json(status);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get download status';
+      res.status(503).json({
+        error: {
+          code: 'AI_SERVICE_UNAVAILABLE',
+          message,
+        },
+      });
+    }
+  }));
+
   router.post('/chat', asyncHandler(async (req, res) => {
     try {
       const response = await hfService.chatStream(req.body, req);

@@ -1,4 +1,4 @@
-import { FolderOpen, Plus, Search, Settings } from 'lucide-react';
+import { FolderOpen, Plus, Search, Settings, Sparkles } from 'lucide-react';
 import type { VaultSummary } from '../../types';
 import { FileTree } from '../explorer/FileTree';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -11,6 +11,8 @@ interface SidebarProps {
   onRefresh: () => void;
   onSearch: () => void;
   onOpenSettings: () => void;
+  onOpenModelLibrary: () => void;
+  activeModelName?: string | null;
   isDark: boolean;
   onToggleTheme: () => void;
   treeKey: number;
@@ -24,6 +26,8 @@ export function Sidebar({
   onRefresh,
   onSearch,
   onOpenSettings,
+  onOpenModelLibrary,
+  activeModelName,
   isDark,
   onToggleTheme,
   treeKey,
@@ -61,6 +65,23 @@ export function Sidebar({
         >
           <FolderOpen size={14} />
           <span className="truncate">{summary.vault ? 'Switch vault' : 'Open vault'}</span>
+        </button>
+        <button
+          onClick={onOpenModelLibrary}
+          className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text"
+          title="Manage & switch Gemma models in Steam-style library"
+        >
+          <Sparkles size={14} className="text-sloth-accent" />
+          <span>Model Library</span>
+          {activeModelName ? (
+            <span className="ml-auto rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-medium text-emerald-600 dark:text-emerald-400 truncate max-w-[80px]">
+              {activeModelName.split('/')[1] || activeModelName}
+            </span>
+          ) : (
+            <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium text-amber-500">
+              No Model
+            </span>
+          )}
         </button>
         <div className="flex gap-1 pt-1">
           <button

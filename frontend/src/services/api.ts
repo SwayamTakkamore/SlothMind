@@ -2,6 +2,7 @@ import type {
   ApiError,
   DirectoryListing,
   HealthResponse,
+  ModelsResponse,
   NoteContent,
   SearchResponse,
   VaultInfo,
@@ -81,4 +82,19 @@ export const api = {
     body: JSON.stringify({ path }),
   }),
   search: (q: string, limit = 20) => request<SearchResponse>(`/api/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  getModels: () => request<ModelsResponse>('/api/ai/models'),
+  activateModel: (model_id: string) => request<{ status: string; active_model: string }>('/api/ai/models/activate', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ model_id }),
+  }),
+  unloadModel: () => request<{ status: string; active_model: null }>('/api/ai/models/unload', {
+    method: 'POST',
+  }),
+  downloadModel: (model_id: string) => request<{ status: string; model_id: string }>('/api/ai/models/download', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ model_id }),
+  }),
+  getDownloadStatus: () => request<{ downloads: Record<string, unknown> }>('/api/ai/models/download-status'),
 };

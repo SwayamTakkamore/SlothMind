@@ -1,4 +1,4 @@
-import { Check, Cpu, Database, Eye, HardDrive, Keyboard, Monitor, Moon, Palette, RefreshCw, ShieldCheck, Sun } from 'lucide-react';
+import { Check, Cpu, Database, Eye, HardDrive, Keyboard, Monitor, Moon, Palette, RefreshCw, ShieldCheck, Sparkles, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '../common/Modal';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -14,6 +14,8 @@ interface SettingsModalProps {
   summary: VaultSummary;
   onOpenVaultPicker: () => void;
   onReindexVault?: () => void;
+  onOpenModelLibrary?: () => void;
+  activeModelName?: string | null;
 }
 
 type SettingsTab = 'appearance' | 'vault' | 'ai' | 'shortcuts';
@@ -27,6 +29,8 @@ export function SettingsModal({
   summary,
   onOpenVaultPicker,
   onReindexVault,
+  onOpenModelLibrary,
+  activeModelName,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
   const [reindexing, setReindexing] = useState(false);
@@ -99,74 +103,74 @@ export function SettingsModal({
               <div>
                 <h3 className="text-sm font-semibold text-sloth-text">Theme & Palette</h3>
                 <p className="text-xs text-sloth-subtle mt-0.5">
-                  Choose your interface appearance. Minimalist palettes optimized for focus.
+                  Select your interface theme or let it match your system.
                 </p>
+              </div>
 
-                {/* 3 Theme Mode Cards */}
-                <div className="grid grid-cols-3 gap-3 mt-4">
-                  {/* Light Card */}
-                  <button
-                    onClick={() => onThemeChange('light')}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
-                      theme === 'light'
-                        ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
-                        : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
-                    }`}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                      <Sun size={18} />
+              {/* Theme Selection Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                {/* Light Card */}
+                <button
+                  onClick={() => onThemeChange('light')}
+                  className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
+                    theme === 'light'
+                      ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
+                      : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
+                  }`}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/15 text-amber-500">
+                    <Sun size={18} />
+                  </div>
+                  <span className="text-xs font-medium text-sloth-text">Light</span>
+                  <span className="text-[10px] text-sloth-subtle">Paper Minimal</span>
+                  {theme === 'light' && (
+                    <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
+                      <Check size={10} />
                     </div>
-                    <span className="text-xs font-medium text-sloth-text">Light</span>
-                    <span className="text-[10px] text-sloth-subtle">Paper Minimal</span>
-                    {theme === 'light' && (
-                      <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
-                        <Check size={10} />
-                      </div>
-                    )}
-                  </button>
+                  )}
+                </button>
 
-                  {/* Dark Card */}
-                  <button
-                    onClick={() => onThemeChange('dark')}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
-                      theme === 'dark'
-                        ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
-                        : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
-                    }`}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sloth-accent/15 text-sloth-accent">
-                      <Moon size={18} />
+                {/* Dark Card */}
+                <button
+                  onClick={() => onThemeChange('dark')}
+                  className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
+                    theme === 'dark'
+                      ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
+                      : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
+                  }`}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sloth-accent/15 text-sloth-accent">
+                    <Moon size={18} />
+                  </div>
+                  <span className="text-xs font-medium text-sloth-text">Dark</span>
+                  <span className="text-[10px] text-sloth-subtle">Charcoal Obsidian</span>
+                  {theme === 'dark' && (
+                    <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
+                      <Check size={10} />
                     </div>
-                    <span className="text-xs font-medium text-sloth-text">Dark</span>
-                    <span className="text-[10px] text-sloth-subtle">Charcoal Obsidian</span>
-                    {theme === 'dark' && (
-                      <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
-                        <Check size={10} />
-                      </div>
-                    )}
-                  </button>
+                  )}
+                </button>
 
-                  {/* System Card */}
-                  <button
-                    onClick={() => onThemeChange('system')}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
-                      theme === 'system'
-                        ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
-                        : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
-                    }`}
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sloth-subtle/15 text-sloth-subtle">
-                      <Monitor size={18} />
+                {/* System Card */}
+                <button
+                  onClick={() => onThemeChange('system')}
+                  className={`relative flex flex-col items-center gap-2 rounded-xl border p-3.5 text-center transition ${
+                    theme === 'system'
+                      ? 'border-sloth-accent ring-2 ring-sloth-accent/20 bg-sloth-surface'
+                      : 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-subtle/50'
+                  }`}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sloth-subtle/15 text-sloth-subtle">
+                    <Monitor size={18} />
+                  </div>
+                  <span className="text-xs font-medium text-sloth-text">System</span>
+                  <span className="text-[10px] text-sloth-subtle">Follows OS</span>
+                  {theme === 'system' && (
+                    <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
+                      <Check size={10} />
                     </div>
-                    <span className="text-xs font-medium text-sloth-text">System</span>
-                    <span className="text-[10px] text-sloth-subtle">Follows OS</span>
-                    {theme === 'system' && (
-                      <div className="absolute top-2 right-2 rounded-full bg-sloth-accent p-0.5 text-white">
-                        <Check size={10} />
-                      </div>
-                    )}
-                  </button>
-                </div>
+                  )}
+                </button>
               </div>
 
               {/* Quick Switcher Demonstration */}
@@ -261,14 +265,35 @@ export function SettingsModal({
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-sloth-subtle">Model:</span>
-                  <span className="text-xs font-mono text-sloth-text">HuggingFaceTB/SmolLM-135M-Instruct</span>
+                  <span className="text-xs text-sloth-subtle">Active Model:</span>
+                  {activeModelName ? (
+                    <span className="text-xs font-mono font-medium text-emerald-500">{activeModelName}</span>
+                  ) : (
+                    <span className="text-xs text-amber-500 font-medium">None (No model selected)</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-sloth-subtle">Available / Offline Cache:</span>
+                  <span className="text-xs font-mono text-sloth-subtle">HuggingFaceTB/SmolLM-135M-Instruct</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-sloth-subtle">Inference Service:</span>
                   <span className="text-xs text-sloth-subtle">FastAPI • 127.0.0.1:43118</span>
                 </div>
               </div>
+
+              {onOpenModelLibrary && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onOpenModelLibrary();
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-sloth-accent px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:bg-sloth-accentHover"
+                >
+                  <Sparkles size={14} />
+                  <span>Open Model Library (Steam Style)</span>
+                </button>
+              )}
 
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 flex items-start gap-2.5">
                 <ShieldCheck size={16} className="text-emerald-500 shrink-0 mt-0.5" />
@@ -288,15 +313,9 @@ export function SettingsModal({
 
               <div className="divide-y divide-sloth-border rounded-xl border border-sloth-border bg-sloth-surface/30">
                 <div className="flex items-center justify-between px-3.5 py-2">
-                  <span className="text-xs text-sloth-text">Full-text Search</span>
+                  <span className="text-xs text-sloth-text">Quick Search Vault</span>
                   <kbd className="rounded border border-sloth-border bg-sloth-panel px-1.5 py-0.5 text-[11px] font-mono text-sloth-subtle">
-                    Ctrl + K / Ctrl + P
-                  </kbd>
-                </div>
-                <div className="flex items-center justify-between px-3.5 py-2">
-                  <span className="text-xs text-sloth-text">Save Note</span>
-                  <kbd className="rounded border border-sloth-border bg-sloth-panel px-1.5 py-0.5 text-[11px] font-mono text-sloth-subtle">
-                    Ctrl + S
+                    Ctrl + K
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between px-3.5 py-2">
@@ -306,15 +325,21 @@ export function SettingsModal({
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between px-3.5 py-2">
-                  <span className="text-xs text-sloth-text">Toggle Light / Dark Theme</span>
+                  <span className="text-xs text-sloth-text">Save Immediately</span>
                   <kbd className="rounded border border-sloth-border bg-sloth-panel px-1.5 py-0.5 text-[11px] font-mono text-sloth-subtle">
-                    Ctrl + Shift + L
+                    Ctrl + S
                   </kbd>
                 </div>
                 <div className="flex items-center justify-between px-3.5 py-2">
-                  <span className="text-xs text-sloth-text">Open Settings</span>
+                  <span className="text-xs text-sloth-text">Settings</span>
                   <kbd className="rounded border border-sloth-border bg-sloth-panel px-1.5 py-0.5 text-[11px] font-mono text-sloth-subtle">
                     Ctrl + ,
+                  </kbd>
+                </div>
+                <div className="flex items-center justify-between px-3.5 py-2">
+                  <span className="text-xs text-sloth-text">Toggle Theme</span>
+                  <kbd className="rounded border border-sloth-border bg-sloth-panel px-1.5 py-0.5 text-[11px] font-mono text-sloth-subtle">
+                    Ctrl + Shift + L
                   </kbd>
                 </div>
               </div>

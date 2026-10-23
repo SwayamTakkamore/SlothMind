@@ -9,6 +9,7 @@ import { SearchModal } from './components/search/SearchModal';
 import { VaultPicker } from './components/vault/VaultPicker';
 import { AIPanel } from './components/ai/AIPanel';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { ModelLibraryModal } from './components/models/ModelLibraryModal';
 import { useVault } from './hooks/useVault';
 import { useAutosave } from './hooks/useAutosave';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -36,7 +37,9 @@ export default function App() {
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [activeModelName, setActiveModelName] = useState<string | null>(null);
   const [treeKey, setTreeKey] = useState(0);
   const [activeNotePath, setActiveNotePath] = useState<string | null>(null);
   const [note, setNote] = useState<NoteContent | null>(null);
@@ -45,6 +48,19 @@ export default function App() {
   const [loadingNote, setLoadingNote] = useState(false);
 
   const refreshTree = useCallback(() => setTreeKey((k) => k + 1), []);
+
+  useEffect(() => {
+    fetch('/api/ai/health')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.model) {
+          setActiveModelName(data.model);
+        } else {
+          setActiveModelName(null);
+        }
+      })
+      .catch(() => setActiveModelName(null));
+  }, []);
 
   useEffect(() => {
     if (!vault.hasVault && !vault.loading) {
@@ -184,13 +200,23 @@ export default function App() {
             }}
             onSearch={() => setSearchOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenModelLibrary={() => setModelLibraryOpen(true)}
+            activeModelName={activeModelName}
             isDark={theme.isDark}
             onToggleTheme={theme.toggleTheme}
             treeKey={treeKey}
           />
         }
         editor={editor}
-        statusBar={<StatusBar summary={vault.summary} saveStatus={autosave.status} activeNote={activeNotePath} />}
+        statusBar={
+          <StatusBar
+            summary={vault.summary}
+            saveStatus={autosave.status}
+            activeNote={activeNotePath}
+            onOpenModelLibrary={() => setModelLibraryOpen(true)}
+            activeModelName={activeModelName}
+          />
+        }
         aiPanel={
           <AIPanel
             isOpen={aiPanelOpen}
@@ -199,6 +225,8 @@ export default function App() {
             activeNoteContent={content}
             onSaveAsNote={saveAsNote}
             onOpenNote={(path) => setActiveNotePath(path)}
+            onOpenModelLibrary={() => setModelLibraryOpen(true)}
+            activeModelName={activeModelName}
           />
         }
       />
@@ -226,6 +254,13 @@ export default function App() {
           await vault.refresh();
           refreshTree();
         }}
+        onOpenModelLibrary={() => setModelLibraryOpen(true)}
+        activeModelName={activeModelName}
+      />
+      <ModelLibraryModal
+        open={modelLibraryOpen}
+        onClose={() => setModelLibraryOpen(false)}
+        onModelChanged={(modelId) => setActiveModelName(modelId)}
       />
     </VaultContext.Provider>
   );

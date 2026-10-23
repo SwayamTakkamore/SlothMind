@@ -26,6 +26,49 @@ export async function getModels() {
   return await res.json();
 }
 
+export async function activateModel(model_id: string) {
+  const res = await fetch(`${HF_SERVICE_URL}/models/activate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Model activation failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
+export async function unloadModel() {
+  const res = await fetch(`${HF_SERVICE_URL}/models/unload`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Model unload failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
+export async function downloadModel(model_id: string) {
+  const res = await fetch(`${HF_SERVICE_URL}/models/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Download initiation failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
+export async function getDownloadStatus() {
+  const res = await fetch(`${HF_SERVICE_URL}/models/download-status`);
+  if (!res.ok) throw new Error(`Download status fetch failed: ${res.status}`);
+  return await res.json();
+}
+
 export async function chatStream(request: ChatRequest, _req: Request) {
   const res = await fetch(`${HF_SERVICE_URL}/chat`, {
     method: 'POST',

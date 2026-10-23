@@ -1,4 +1,4 @@
-import { Cpu, Database, FileText, HardDrive, ShieldCheck } from 'lucide-react';
+import { Cpu, Database, FileText, HardDrive, ShieldCheck, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { SaveStatus, VaultSummary } from '../../types';
 
@@ -6,6 +6,8 @@ interface StatusBarProps {
   summary: VaultSummary;
   saveStatus: SaveStatus;
   activeNote: string | null;
+  onOpenModelLibrary?: () => void;
+  activeModelName?: string | null;
 }
 
 function saveLabel(status: SaveStatus): { text: string; className: string } {
@@ -21,20 +23,28 @@ function saveLabel(status: SaveStatus): { text: string; className: string } {
   }
 }
 
-export function StatusBar({ summary, saveStatus, activeNote }: StatusBarProps) {
+export function StatusBar({
+  summary,
+  saveStatus,
+  activeNote,
+  onOpenModelLibrary,
+  activeModelName,
+}: StatusBarProps) {
   const { text: statusText, className: statusClass } = saveLabel(saveStatus);
   const vaultName = summary.vault?.name ?? 'No vault open';
   const vaultPath = summary.vault?.path ?? 'None';
-  const [aiStatus, setAiStatus] = useState<{ status: string; provider?: string; device?: string; gpu?: string; model?: string } | null>(null);
+  const [aiStatus, setAiStatus] = useState<{ status: string; provider?: string; device?: string; gpu?: string; model?: string | null } | null>(null);
 
   useEffect(() => {
     fetch('/api/ai/health')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setAiStatus(data))
       .catch(() => setAiStatus(null));
-  }, []);
+  }, [activeModelName]);
 
   const aiReady = aiStatus?.status === 'ok';
+  const currentModel = activeModelName !== undefined ? activeModelName : aiStatus?.model;
+  const currentModelShort = currentModel ? currentModel.split('/')[1] || currentModel : null;
 
   return (
     <footer className="flex h-7 items-center justify-between border-t border-sloth-border bg-sloth-panel/90 px-3 text-[11px] text-sloth-subtle select-none">
@@ -75,20 +85,37 @@ export function StatusBar({ summary, saveStatus, activeNote }: StatusBarProps) {
           <span>Local-first</span>
         </span>
 
-        {/* AI status with technical details on hover */}
-        <span
-          className="flex items-center gap-1.5 cursor-help transition hover:text-sloth-text"
+        {/* AI status with technical details on hover and 1-click model library opener */}
+        <button
+          onClick={onOpenModelLibrary}
+          className="flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 transition hover:bg-sloth-surface hover:text-sloth-text"
           title={
             aiReady
-              ? `Local AI: Online\nProvider: Hugging Face Local\nDevice: ${aiStatus?.device ?? 'CUDA'}\nGPU: ${aiStatus?.gpu ?? 'RTX 3050'}\nModel: ${aiStatus?.model ?? 'SmolLM-135M-Instruct'}`
-              : 'Local AI: Service is starting or offline'
+              ? `Local AI: Online\nDevice: ${aiStatus?.device ?? 'CUDA'}\nGPU: ${aiStatus?.gpu ?? 'RTX 3050'}\nActive Model: ${currentModel ?? 'None (Click to choose & activate model)'}\nClick to open Steam-style Model Library`
+              : 'Local AI: Service starting or offline. Click to view models.'
           }
         >
-          <Cpu size={12} className={aiReady ? 'text-emerald-500' : 'text-sloth-subtle'} />
-          <span className="hidden md:inline">
-            {aiReady ? (aiStatus?.device?.includes('cuda') ? 'AI (CUDA)' : 'AI Ready') : 'AI Offline'}
-          </span>
-        </span>
+          {currentModel ? (
+            <>
+              <Cpu size={12} className="text-emerald-500" />
+              <span className="hidden md:inline text-emerald-500 font-medium">
+                {currentModelShort}
+              </span>
+            </>
+          ) : aiReady ? (
+            <>
+              <Sparkles size={12} className="text-amber-500" />
+              <span className="hidden md:inline text-amber-500 font-medium">
+                AI: No Model (Click to Load)
+              </span>
+            </>
+          ) : (
+            <>
+              <Cpu size={12} className="text-sloth-subtle" />
+              <span className="hidden md:inline text-sloth-subtle">AI Offline</span>
+            </>
+          )}
+        </button>
 
         {/* Save status */}
         <span

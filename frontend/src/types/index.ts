@@ -78,3 +78,33 @@ export interface HealthResponse {
 }
 
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  family: string;
+  parameters: string;
+  size_gb: number;
+  recommended: boolean;
+  description: string;
+  context_window: number;
+  tags: string[];
+  is_downloaded: boolean;
+  is_downloading: boolean;
+  download_progress: number;
+  download_status: 'available' | 'downloading' | 'completed' | 'error';
+  download_message?: string | null;
+  is_active: boolean;
+  disk_size_bytes: number;
+}
+
+export interface ModelsResponse {
+  active_model: string | null;
+  device: {
+    device?: string;
+    gpu?: string;
+    gpu_count?: number;
+    total_vram_mb?: number;
+  };
+  models: ModelInfo[];
+}
