@@ -6,9 +6,10 @@ interface MainLayoutProps {
   sidebar: ReactNode;
   editor: ReactNode;
   statusBar: ReactNode;
+  aiPanel?: ReactNode;
 }
 
-export function MainLayout({ sidebar, editor, statusBar }: MainLayoutProps) {
+export function MainLayout({ sidebar, editor, statusBar, aiPanel }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -29,6 +30,7 @@ export function MainLayout({ sidebar, editor, statusBar }: MainLayoutProps) {
           </button>
         </aside>
         <main className="flex min-w-0 flex-1 flex-col bg-sloth-bg">{editor}</main>
+        {aiPanel}
       </div>
       {statusBar}
     </div>

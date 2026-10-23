@@ -7,6 +7,7 @@ import { EditorHeader } from './components/editor/EditorHeader';
 import { MarkdownEditor } from './components/editor/MarkdownEditor';
 import { SearchModal } from './components/search/SearchModal';
 import { VaultPicker } from './components/vault/VaultPicker';
+import { AIPanel } from './components/ai/AIPanel';
 import { useVault } from './hooks/useVault';
 import { useAutosave } from './hooks/useAutosave';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -31,6 +32,7 @@ export default function App() {
   const vault = useVault();
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [treeKey, setTreeKey] = useState(0);
   const [activeNotePath, setActiveNotePath] = useState<string | null>(null);
   const [note, setNote] = useState<NoteContent | null>(null);
@@ -145,6 +147,22 @@ export default function App() {
     </div>
   );
 
+  const saveAsNote = useCallback(
+    async (aiContent: string) => {
+      if (!vault.hasVault) return;
+      try {
+        const name = window.prompt('Save as note with name:', `AI Note ${new Date().toISOString().slice(0, 10)}`);
+        if (!name) return;
+        const filename = name.endsWith('.md') ? name : `${name}.md`;
+        await api.writeNote(filename, aiContent);
+        refreshTree();
+      } catch (err) {
+        console.error('Save as note failed', err);
+      }
+    },
+    [vault.hasVault, refreshTree]
+  );
+
   return (
     <VaultContext.Provider value={{ activeNotePath, setActiveNotePath, refreshTree }}>
       <MainLayout
@@ -164,6 +182,15 @@ export default function App() {
         }
         editor={editor}
         statusBar={<StatusBar summary={vault.summary} saveStatus={autosave.status} activeNote={activeNotePath} />}
+        aiPanel={
+          <AIPanel
+            isOpen={aiPanelOpen}
+            onToggle={() => setAiPanelOpen((o) => !o)}
+            activeNotePath={activeNotePath}
+            activeNoteContent={content}
+            onSaveAsNote={saveAsNote}
+          />
+        }
       />
       <VaultPicker
         open={vaultPickerOpen}

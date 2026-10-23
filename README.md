@@ -3,7 +3,7 @@
 **Your second brain. Your rules.**  
 A local-first, privacy-focused Markdown knowledge workspace for developers and researchers.
 
-## What works in this build (Phases 0 & 1)
+## What works in this build (Phases 0, 1 & 2)
 
 - **Vault management** – Open an existing folder or create a new vault. Recent vaults are remembered in `localStorage`.
 - **Safe filesystem access** – All backend operations are scoped to the active vault. Path traversal, absolute paths, and symlink escapes are rejected. Writes use atomic rename (temp file + rename), renames/moves block silent overwrites, and deletes move items to a recoverable `.trash/` folder.
@@ -12,6 +12,7 @@ A local-first, privacy-focused Markdown knowledge workspace for developers and r
 - **Reliable autosave** – Debounced autosave (800ms), save on blur/note switch, manual `Ctrl+S`/`Cmd+S`, and visible status (`Saved`, `Saving...`, `Unsaved changes`, `Save error`).
 - **Full-text search** – Instant modal (`Ctrl+K` / `Ctrl+P`) with title/content matches, excerpts, section hints, and keyboard navigation.
 - **Local-first UX** – Charcoal dark theme with violet accent, desktop layout with collapsible sidebar and status bar.
+- **Hugging Face Local AI** – Complete migration from Ollama to local Hugging Face service with CUDA acceleration. Right AI panel with streaming chat, summarize note, rewrite selection, and save as note functionality.
 - **Sample vault** – `sample-vault/` included for quick testing.
 
 ## Architecture
@@ -32,7 +33,9 @@ SlothMind/
 
 - Node.js `>=20.19.0` (tested with `v24.13.0` via nvm at `/home/kali/.nvm/versions/node/v24.13.0/bin`)
 - npm
-- Ollama is installed in this environment on `http://127.0.0.1:11434` with `glm-4.7-flash:latest` (AI features beyond the vault workspace are planned for later phases)
+- Python 3 with `torch`, `transformers`, `accelerate`, `fastapi`, `uvicorn` (for local Hugging Face AI service)
+- NVIDIA GPU with CUDA (optional but recommended) - tested with RTX 3050 Laptop GPU
+- Pre-cached model: `HuggingFaceTB/SmolLM-135M-Instruct` in `~/.cache/huggingface/hub/`
 
 ## Setup
 
@@ -43,7 +46,7 @@ npm install
 
 ## Run in development
 
-Start both backend and frontend together:
+Start backend, frontend, and the local Hugging Face AI service together:
 
 ```bash
 export PATH="$HOME/.nvm/versions/node/v24.13.0/bin:$PATH"
@@ -52,8 +55,9 @@ npm run dev
 
 - Backend: http://127.0.0.1:43117
 - Frontend: http://localhost:5173
+- AI Service: http://127.0.0.1:43118
 
-Alternatively run them separately from `backend/` and `frontend/`.
+Alternatively run them separately from `backend/`, `frontend/`, or with `npm run ai`.
 
 ## Test
 

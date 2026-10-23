@@ -6,6 +6,7 @@ import { vaultRouter } from './routes/vault';
 import { notesRouter } from './routes/notes';
 import { searchRouter } from './routes/search';
 import { systemRouter } from './routes/system';
+import { aiRouter } from './routes/ai';
 import { VaultSession } from './services/vaultSession';
 
 export interface CreateServerOptions {
@@ -39,6 +40,7 @@ export function createApp(options: CreateServerOptions = {}) {
   app.use('/api/vault', vaultRouter(session));
   app.use('/api/notes', notesRouter(session));
   app.use('/api/search', searchRouter(session));
+  app.use('/api/ai', aiRouter(session));
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     void _next;
