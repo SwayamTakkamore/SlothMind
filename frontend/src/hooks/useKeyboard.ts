@@ -6,20 +6,17 @@ interface Shortcuts {
   onSearch?: () => void;
   onSave?: () => void;
   onNewNote?: () => void;
+  onSettings?: () => void;
+  onToggleTheme?: () => void;
 }
 
-export function useKeyboard({ onSearch, onSave, onNewNote }: Shortcuts) {
+export function useKeyboard({ onSearch, onSave, onNewNote, onSettings, onToggleTheme }: Shortcuts) {
   useEffect(() => {
     const handler: Handler = (event) => {
       const key = event.key.toLowerCase();
       const mod = event.ctrlKey || event.metaKey;
 
-      if (mod && key === 'p') {
-        event.preventDefault();
-        onSearch?.();
-        return;
-      }
-      if (mod && key === 'k') {
+      if (mod && (key === 'p' || key === 'k')) {
         event.preventDefault();
         onSearch?.();
         return;
@@ -34,8 +31,18 @@ export function useKeyboard({ onSearch, onSave, onNewNote }: Shortcuts) {
         onNewNote?.();
         return;
       }
+      if (mod && key === ',') {
+        event.preventDefault();
+        onSettings?.();
+        return;
+      }
+      if (mod && event.shiftKey && key === 'l') {
+        event.preventDefault();
+        onToggleTheme?.();
+        return;
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onNewNote, onSave, onSearch]);
+  }, [onNewNote, onSave, onSearch, onSettings, onToggleTheme]);
 }

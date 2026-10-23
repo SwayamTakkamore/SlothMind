@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Save } from 'lucide-react';
+import { Check, Eye, EyeOff, FileText, Info, Save } from 'lucide-react';
 import type { SaveStatus } from '../../types';
 
 interface EditorHeaderProps {
@@ -9,42 +9,74 @@ interface EditorHeaderProps {
   onSaveNow: () => void;
 }
 
-function statusCopy(status: SaveStatus): string {
-  switch (status) {
-    case 'saving':
-      return 'Saving';
-    case 'unsaved':
-      return 'Unsaved';
-    case 'error':
-      return 'Error';
-    default:
-      return 'Saved';
-  }
+function cleanTitle(path: string | null): { folder: string | null; title: string } {
+  if (!path) return { folder: null, title: 'No note selected' };
+  const parts = path.split('/');
+  const rawFileName = parts[parts.length - 1];
+  const title = rawFileName.replace(/\.md$/i, '');
+  const folder = parts.length > 1 ? parts.slice(0, -1).join(' / ') : null;
+  return { folder, title };
 }
 
 export function EditorHeader({ path, saveStatus, preview, onTogglePreview, onSaveNow }: EditorHeaderProps) {
+  const { folder, title } = cleanTitle(path);
+
   return (
-    <header className="flex items-center justify-between border-b border-sloth-border px-6 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-sm">{path ?? 'No note selected'}</p>
-        <p className="text-xs text-sloth-subtle">UTF-8 Markdown • {statusCopy(saveStatus)}</p>
+    <header className="flex h-12 items-center justify-between border-b border-sloth-border px-6 select-none bg-sloth-panel/40 backdrop-blur-sm">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <FileText size={15} className="text-sloth-subtle shrink-0" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-medium text-sloth-text truncate">
+            {folder && <span className="text-xs text-sloth-subtle font-normal">{folder} /</span>}
+            <span className="truncate" title={path ?? undefined}>{title}</span>
+          </div>
+        </div>
+
+        {/* Clean Save / Format Indicator with full details in hover tooltip */}
+        {path && (
+          <div
+            className="group relative ml-2 flex items-center gap-1.5 cursor-help rounded-full px-2 py-0.5 text-[11px] text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text"
+            title={`Format: UTF-8 Plain Markdown\nPath: ${path}\nStatus: ${saveStatus === 'saved' ? 'Autosaved to disk' : saveStatus}`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                saveStatus === 'saving'
+                  ? 'bg-sloth-accent animate-pulse'
+                  : saveStatus === 'unsaved'
+                  ? 'bg-sloth-warning'
+                  : saveStatus === 'error'
+                  ? 'bg-sloth-danger'
+                  : 'bg-sloth-success'
+              }`}
+            />
+            <span className="capitalize">{saveStatus}</span>
+            <Info size={11} className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 text-sloth-subtle" />
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-1">
+
+      <div className="flex items-center gap-1.5">
         <button
           onClick={onSaveNow}
           disabled={!path || saveStatus === 'saving'}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text disabled:opacity-40"
+          title="Save note (Ctrl+S)"
         >
-          <Save size={16} />
-          Save
+          {saveStatus === 'saved' ? <Check size={14} className="text-sloth-success" /> : <Save size={14} />}
+          <span>Save</span>
         </button>
         <button
           onClick={onTogglePreview}
           disabled={!path}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text disabled:opacity-40"
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs transition disabled:opacity-40 ${
+            preview
+              ? 'bg-sloth-accent/15 text-sloth-accent'
+              : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+          }`}
+          title={preview ? 'Switch to Source Editor' : 'Switch to Markdown Preview'}
         >
-          {preview ? <EyeOff size={16} /> : <Eye size={16} />}
-          {preview ? 'Source' : 'Preview'}
+          {preview ? <EyeOff size={14} /> : <Eye size={14} />}
+          <span>{preview ? 'Source' : 'Preview'}</span>
         </button>
       </div>
     </header>

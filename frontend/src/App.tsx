@@ -8,9 +8,11 @@ import { MarkdownEditor } from './components/editor/MarkdownEditor';
 import { SearchModal } from './components/search/SearchModal';
 import { VaultPicker } from './components/vault/VaultPicker';
 import { AIPanel } from './components/ai/AIPanel';
+import { SettingsModal } from './components/settings/SettingsModal';
 import { useVault } from './hooks/useVault';
 import { useAutosave } from './hooks/useAutosave';
 import { useKeyboard } from './hooks/useKeyboard';
+import { useTheme } from './hooks/useTheme';
 import { api } from './services/api';
 import type { NoteContent } from './types';
 
@@ -30,8 +32,10 @@ export function useVaultContext() {
 
 export default function App() {
   const vault = useVault();
+  const theme = useTheme();
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [treeKey, setTreeKey] = useState(0);
   const [activeNotePath, setActiveNotePath] = useState<string | null>(null);
@@ -110,6 +114,8 @@ export default function App() {
     onSearch: () => setSearchOpen(true),
     onSave: () => void autosave.saveNow(),
     onNewNote: () => void createNote(),
+    onSettings: () => setSettingsOpen((o) => !o),
+    onToggleTheme: theme.toggleTheme,
   });
 
   const editor = (
@@ -129,15 +135,15 @@ export default function App() {
             <MarkdownEditor value={content} onChange={setContent} preview={preview} />
           )
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <p className="text-lg font-medium">No note selected</p>
-            <p className="max-w-sm text-sm text-sloth-subtle">
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center p-6">
+            <p className="text-base font-semibold text-sloth-text">No note selected</p>
+            <p className="max-w-sm text-xs text-sloth-subtle leading-relaxed">
               Open a vault, pick a note from the explorer, or create a new Markdown note. Changes autosave to disk.
             </p>
             <button
               onClick={() => void createNote()}
               disabled={!vault.hasVault}
-              className="rounded-md bg-sloth-accent px-3 py-1.5 text-sm text-white disabled:opacity-40"
+              className="rounded-lg bg-sloth-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-sloth-accentHover disabled:opacity-40"
             >
               Create note
             </button>
@@ -177,6 +183,9 @@ export default function App() {
               refreshTree();
             }}
             onSearch={() => setSearchOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            isDark={theme.isDark}
+            onToggleTheme={theme.toggleTheme}
             treeKey={treeKey}
           />
         }
@@ -205,6 +214,19 @@ export default function App() {
         }}
       />
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        theme={theme.theme}
+        onThemeChange={theme.setTheme}
+        isDark={theme.isDark}
+        summary={vault.summary}
+        onOpenVaultPicker={() => setVaultPickerOpen(true)}
+        onReindexVault={async () => {
+          await vault.refresh();
+          refreshTree();
+        }}
+      />
     </VaultContext.Provider>
   );
 }

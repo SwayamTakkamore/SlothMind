@@ -1,26 +1,30 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         sloth: {
-          bg: '#121316',
-          panel: '#1a1b20',
-          surface: '#22242b',
-          border: '#2f323c',
-          text: '#e6e6e6',
-          subtle: '#9ca0aa',
-          accent: '#8b5cf6',
-          accentHover: '#a78bfa',
-          success: '#22c55e',
-          warning: '#f59e0b',
-          danger: '#ef4444',
+          bg: 'rgb(var(--sloth-bg) / <alpha-value>)',
+          panel: 'rgb(var(--sloth-panel) / <alpha-value>)',
+          surface: 'rgb(var(--sloth-surface) / <alpha-value>)',
+          border: 'rgb(var(--sloth-border) / <alpha-value>)',
+          text: 'rgb(var(--sloth-text) / <alpha-value>)',
+          subtle: 'rgb(var(--sloth-subtle) / <alpha-value>)',
+          accent: 'rgb(var(--sloth-accent) / <alpha-value>)',
+          accentHover: 'rgb(var(--sloth-accent-hover) / <alpha-value>)',
+          success: 'rgb(var(--sloth-success) / <alpha-value>)',
+          warning: 'rgb(var(--sloth-warning) / <alpha-value>)',
+          danger: 'rgb(var(--sloth-danger) / <alpha-value>)',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+      },
+      transitionTimingFunction: {
+        spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
       },
     },
   },

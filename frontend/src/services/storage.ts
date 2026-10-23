@@ -2,6 +2,9 @@ import type { VaultInfo } from '../types';
 
 const RECENT_VAULTS_KEY = 'slothmind.recentVaults.v1';
 const LAST_VAULT_KEY = 'slothmind.lastVault.v1';
+const THEME_KEY = 'slothmind.theme.v1';
+
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface RecentVault extends VaultInfo {
   lastOpened: string;
@@ -47,6 +50,26 @@ export function getLastVaultPath(): string | null {
 export function clearLastVault(): void {
   try {
     localStorage.removeItem(LAST_VAULT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+export function getStoredTheme(): ThemeMode {
+  try {
+    const val = localStorage.getItem(THEME_KEY);
+    if (val === 'light' || val === 'dark' || val === 'system') {
+      return val;
+    }
+  } catch {
+    // ignore
+  }
+  return 'dark';
+}
+
+export function setStoredTheme(theme: ThemeMode): void {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
   } catch {
     // ignore
   }

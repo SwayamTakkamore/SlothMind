@@ -3,21 +3,54 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+  /* Light mode: Clean, crisp paper minimalism */
+  --sloth-bg: 248 250 252;
+  --sloth-panel: 255 255 255;
+  --sloth-surface: 241 245 249;
+  --sloth-border: 226 232 240;
+  --sloth-text: 15 23 42;
+  --sloth-subtle: 100 116 139;
+  --sloth-accent: 79 70 229;
+  --sloth-accent-hover: 67 56 202;
+  --sloth-success: 22 163 74;
+  --sloth-warning: 217 119 6;
+  --sloth-danger: 220 38 38;
+}
+
+.dark {
   color-scheme: dark;
+  /* Dark mode: Deep, sleek obsidian charcoal */
+  --sloth-bg: 12 13 16;
+  --sloth-panel: 20 22 27;
+  --sloth-surface: 28 31 38;
+  --sloth-border: 39 43 54;
+  --sloth-text: 241 245 249;
+  --sloth-subtle: 139 148 165;
+  --sloth-accent: 139 92 246;
+  --sloth-accent-hover: 167 139 250;
+  --sloth-success: 34 197 94;
+  --sloth-warning: 245 158 11;
+  --sloth-danger: 239 68 68;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3f4251 transparent;
+  scrollbar-color: rgb(var(--sloth-border)) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #3f4251;
-  border-radius: 6px;
+  background-color: rgb(var(--sloth-border));
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 html,
@@ -27,57 +60,91 @@ body,
 }
 
 body {
-  font-family: Inter, system-ui, sans-serif;
-  background: radial-gradient(circle at top, rgba(139, 92, 246, 0.08), transparent 55%), #121316;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background-color: rgb(var(--sloth-bg));
+  color: rgb(var(--sloth-text));
+  transition: background-color 0.25s ease, color 0.25s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Subtle background glow for dark mode */
+.dark body {
+  background-image: radial-gradient(circle at top, rgba(139, 92, 246, 0.06), transparent 55%), radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.04), transparent 45%);
+}
+
+/* Markdown preview prose styles adapting to current theme */
 .prose-sloth {
-  color: #e6e6e6;
+  color: rgb(var(--sloth-text));
 }
 
 .prose-sloth h1,
 .prose-sloth h2,
 .prose-sloth h3,
 .prose-sloth h4 {
-  color: #f8f8f8;
+  color: rgb(var(--sloth-text));
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .prose-sloth a {
-  color: #a78bfa;
+  color: rgb(var(--sloth-accent));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.prose-sloth a:hover {
+  color: rgb(var(--sloth-accent-hover));
 }
 
 .prose-sloth code {
-  background: rgba(139, 92, 246, 0.18);
+  background: rgb(var(--sloth-accent) / 0.12);
+  color: rgb(var(--sloth-accent));
   padding: 0.15rem 0.35rem;
   border-radius: 0.375rem;
+  font-size: 0.875em;
+  font-family: JetBrains Mono, monospace;
 }
 
 .prose-sloth pre {
-  background: #16171c;
-  border: 1px solid #2f323c;
+  background: rgb(var(--sloth-surface));
+  border: 1px solid rgb(var(--sloth-border));
   border-radius: 0.75rem;
+  padding: 1rem;
   overflow-x: auto;
 }
 
 .prose-sloth pre code {
   background: transparent;
+  color: rgb(var(--sloth-text));
   padding: 0;
+  border-radius: 0;
 }
 
 .prose-sloth blockquote {
-  border-left: 2px solid rgba(139, 92, 246, 0.8);
-  color: #c9cbd6;
+  border-left: 3px solid rgb(var(--sloth-accent));
+  color: rgb(var(--sloth-subtle));
+  padding-left: 1rem;
+  margin-left: 0;
+  font-style: italic;
+}
+
+.prose-sloth hr {
+  border-color: rgb(var(--sloth-border));
+  margin: 2rem 0;
 }
 
 .prose-sloth table {
   width: 100%;
+  border-collapse: collapse;
+}
+
+.prose-sloth th,
+.prose-sloth td {
+  border: 1px solid rgb(var(--sloth-border));
+  padding: 0.5rem 0.75rem;
 }
 
 .prose-sloth th {
-  background: rgba(139, 92, 246, 0.12);
-}
-
-.prose-sloth hr {
-  border-color: #2f323c;
+  background: rgb(var(--sloth-surface));
 }
