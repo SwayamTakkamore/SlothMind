@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f4251 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #3f4251;
+  border-radius: 6px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: radial-gradient(circle at top, rgba(139, 92, 246, 0.08), transparent 55%), #121316;
+}
+
+.prose-sloth {
+  color: #e6e6e6;
+}
+
+.prose-sloth h1,
+.prose-sloth h2,
+.prose-sloth h3,
+.prose-sloth h4 {
+  color: #f8f8f8;
+  font-weight: 600;
+}
+
+.prose-sloth a {
+  color: #a78bfa;
+}
+
+.prose-sloth code {
+  background: rgba(139, 92, 246, 0.18);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.375rem;
+}
+
+.prose-sloth pre {
+  background: #16171c;
+  border: 1px solid #2f323c;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+}
+
+.prose-sloth pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.prose-sloth blockquote {
+  border-left: 2px solid rgba(139, 92, 246, 0.8);
+  color: #c9cbd6;
+}
+
+.prose-sloth table {
+  width: 100%;
+}
+
+.prose-sloth th {
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.prose-sloth hr {
+  border-color: #2f323c;
+}
