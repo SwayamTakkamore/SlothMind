@@ -1,11 +1,20 @@
-import { FileText, RefreshCw, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { BookOpen, FileText, MessageSquare, RefreshCw, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AIChatMessage } from './AIChatMessage';
 import { AIPromptInput } from './AIPromptInput';
 
+interface Citation {
+  id: number;
+  path: string;
+  title: string;
+  section: string | null;
+  excerpt: string;
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  citations?: Citation[];
 }
 
 interface AIStatus {
@@ -21,12 +30,14 @@ interface AIPanelProps {
   activeNotePath: string | null;
   activeNoteContent: string;
   onSaveAsNote?: (content: string) => void;
+  onOpenNote?: (path: string) => void;
 }
 
-export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, onSaveAsNote }: AIPanelProps) {
+export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, onSaveAsNote, onOpenNote }: AIPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+  const [mode, setMode] = useState<'chat' | 'rag'>('rag');
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,12 +61,15 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch('/api/ai/chat', {
+      const endpoint = mode === 'rag' ? '/api/ai/ask' : '/api/ai/chat';
+      const body = mode === 'rag' 
+        ? { question: content }
+        : { messages: [...messages, userMessage] };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -66,6 +80,7 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let assistantContent = '';
+      let citations: Citation[] = [];
 
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
@@ -80,14 +95,26 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
               const data = line.slice(6);
               if (data === '[DONE]') break;
               try {
-                const parsed = JSON.parse(data) as { content?: string };
-                if (parsed.content) {
+                const parsed = JSON.parse(data) as { content?: string; type?: string; citations?: Citation[] };
+                if (parsed.type === 'citations' && parsed.citations) {
+                  citations = parsed.citations;
+                  setMessages((prev) => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1] = {
+                      role: 'assistant',
+                      content: assistantContent,
+                      citations,
+                    };
+                    return newMessages;
+                  });
+                } else if (parsed.content) {
                   assistantContent += parsed.content;
                   setMessages((prev) => {
                     const newMessages = [...prev];
                     newMessages[newMessages.length - 1] = {
                       role: 'assistant',
                       content: assistantContent,
+                      citations,
                     };
                     return newMessages;
                   });
@@ -110,7 +137,7 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
-  }, [messages]);
+  }, [messages, mode]);
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -213,6 +240,33 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
         </button>
       </div>
 
+      <div className="flex gap-1 border-b border-sloth-border p-1">
+        <button
+          onClick={() => setMode('rag')}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs transition ${
+            mode === 'rag'
+              ? 'bg-sloth-accent text-white'
+              : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+          }`}
+          title="Ask Your Vault"
+        >
+          <BookOpen size={12} />
+          Vault Q&A
+        </button>
+        <button
+          onClick={() => setMode('chat')}
+          className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs transition ${
+            mode === 'chat'
+              ? 'bg-sloth-accent text-white'
+              : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+          }`}
+          title="General Chat"
+        >
+          <MessageSquare size={12} />
+          General Chat
+        </button>
+      </div>
+
       <div className="flex gap-1 border-b border-sloth-border p-2">
         <button
           onClick={handleSummarizeNote}
@@ -258,13 +312,43 @@ export function AIPanel({ isOpen, onToggle, activeNotePath, activeNoteContent, o
               <div key={idx}>
                 <AIChatMessage role={msg.role} content={msg.content} />
                 {msg.role === 'assistant' && msg.content && (
-                  <button
-                    onClick={() => handleSaveAsNote(msg.content)}
-                    className="ml-8 mt-1 flex items-center gap-1 text-xs text-sloth-accent transition hover:underline"
-                  >
-                    <Save size={10} />
-                    Save as note
-                  </button>
+                  <>
+                    {msg.citations && msg.citations.length > 0 && (
+                      <div className="ml-8 mt-2 space-y-1">
+                        <p className="text-xs text-sloth-subtle">Sources:</p>
+                        {msg.citations.map((citation) => (
+                          <button
+                            key={citation.id}
+                            onClick={() => {
+                              if (onOpenNote) {
+                                onOpenNote(citation.path);
+                              }
+                            }}
+                            className="flex w-full items-start gap-2 rounded-md bg-sloth-surface p-2 text-left text-xs transition hover:bg-sloth-border"
+                            title={`Open ${citation.path}`}
+                          >
+                            <span className="rounded bg-sloth-accent/20 px-1.5 py-0.5 text-sloth-accent">
+                              [{citation.id}]
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sloth-text truncate">{citation.title}</p>
+                              {citation.section && (
+                                <p className="text-sloth-subtle truncate">{citation.section}</p>
+                              )}
+                              <p className="text-sloth-subtle truncate">{citation.path}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleSaveAsNote(msg.content)}
+                      className="ml-8 mt-1 flex items-center gap-1 text-xs text-sloth-accent transition hover:underline"
+                    >
+                      <Save size={10} />
+                      Save as note
+                    </button>
+                  </>
                 )}
               </div>
             ))}

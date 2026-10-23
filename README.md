@@ -3,7 +3,7 @@
 **Your second brain. Your rules.**  
 A local-first, privacy-focused Markdown knowledge workspace for developers and researchers.
 
-## What works in this build (Phases 0, 1 & 2)
+## What works in this build (Phases 0, 1, 2 & 3)
 
 - **Vault management** – Open an existing folder or create a new vault. Recent vaults are remembered in `localStorage`.
 - **Safe filesystem access** – All backend operations are scoped to the active vault. Path traversal, absolute paths, and symlink escapes are rejected. Writes use atomic rename (temp file + rename), renames/moves block silent overwrites, and deletes move items to a recoverable `.trash/` folder.
@@ -13,6 +13,7 @@ A local-first, privacy-focused Markdown knowledge workspace for developers and r
 - **Full-text search** – Instant modal (`Ctrl+K` / `Ctrl+P`) with title/content matches, excerpts, section hints, and keyboard navigation.
 - **Local-first UX** – Charcoal dark theme with violet accent, desktop layout with collapsible sidebar and status bar.
 - **Hugging Face Local AI** – Complete migration from Ollama to local Hugging Face service with CUDA acceleration. Right AI panel with streaming chat, summarize note, rewrite selection, and save as note functionality.
+- **Ask Your Vault (Grounded RAG)** – Ask questions about your notes with section-aware chunking, retrieval of relevant passages, and answers grounded strictly in your vault. Citations are validated against retrieved content and clicking them opens the source note in the editor. If the vault doesn't contain enough information, the assistant honestly abstains.
 - **Sample vault** – `sample-vault/` included for quick testing.
 
 ## Architecture
@@ -82,7 +83,8 @@ npm run build
 3. Click **Open / Switch vault** → create or open a folder (try `sample-vault/`)
 4. Create a note with `Ctrl+N` or the sidebar button, type Markdown, and watch it autosave
 5. Search with `Ctrl+K` / `Ctrl+P` and jump to a note
-6. Rename/delete notes from the file tree (deletes go to `.trash/`)
+6. Try **Vault Q&A** in the AI panel - ask questions about your notes and click citations to jump to sources
+7. Rename/delete notes from the file tree (deletes go to `.trash/`)
 
 ## Security notes
 

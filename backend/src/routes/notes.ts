@@ -46,6 +46,7 @@ export function notesRouter(session: VaultSession): Router {
     const content = requireString(body.content, 'content');
     const note = await vault.writeNote(path, content);
     index.invalidate([note.path]);
+    await index.refresh().catch(() => undefined);
     res.json(note);
   }));
 

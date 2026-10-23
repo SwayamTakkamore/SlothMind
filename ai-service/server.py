@@ -119,7 +119,13 @@ async def get_models():
     }
 
 def format_chat_prompt(messages: List[ChatMessage]) -> str:
-    # Simple chat formatting for SmolLM
+    if tokenizer is not None and hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
+        try:
+            msg_dicts = [{"role": m.role, "content": m.content} for m in messages]
+            return tokenizer.apply_chat_template(msg_dicts, tokenize=False, add_generation_prompt=True)
+        except Exception:
+            pass
+    # Simple fallback chat formatting
     prompt = ""
     for msg in messages:
         if msg.role == "system":
@@ -145,7 +151,8 @@ async def chat(request: ChatRequest):
             **inputs,
             streamer=streamer,
             max_new_tokens=min(request.max_tokens or 256, 512),
-            temperature=request.temperature or 0.7,
+            temperature=request.temperature or 0.3,
+            repetition_penalty=1.15,
             do_sample=True,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
@@ -185,6 +192,7 @@ async def summarize(request: SummarizeRequest):
                 **inputs,
                 max_new_tokens=min(request.max_length or 150, 300),
                 temperature=0.3,
+                repetition_penalty=1.15,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
@@ -216,7 +224,8 @@ async def rewrite(request: RewriteRequest):
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=256,
-                temperature=0.5,
+                temperature=0.4,
+                repetition_penalty=1.15,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,

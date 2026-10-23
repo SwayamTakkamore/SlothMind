@@ -189,6 +189,7 @@ export default function App() {
             activeNotePath={activeNotePath}
             activeNoteContent={content}
             onSaveAsNote={saveAsNote}
+            onOpenNote={(path) => setActiveNotePath(path)}
           />
         }
       />
