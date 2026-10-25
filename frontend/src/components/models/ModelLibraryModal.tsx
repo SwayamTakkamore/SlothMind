@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Cpu, Download, HardDrive, Play, Power, RefreshCw, Sparkles, X } from 'lucide-react';
+import { AlertCircle, Check, Cpu, Download, HardDrive, Pause, Play, Power, RefreshCw, Sparkles, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../common/Modal';
 import { api } from '../../services/api';
@@ -93,22 +93,75 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
     }
   };
 
+  const handlePause = async (modelId: string) => {
+    setActionLoading(`pause-${modelId}`);
+    setErrorMsg(null);
+    try {
+      await api.pauseModel(modelId);
+      await fetchModels();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Pause failed';
+      setErrorMsg(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleResume = async (modelId: string) => {
+    setActionLoading(`resume-${modelId}`);
+    setErrorMsg(null);
+    try {
+      await api.resumeModel(modelId);
+      await fetchModels();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Resume failed';
+      setErrorMsg(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (modelId: string, modelName: string) => {
+    const isCurrentlyActive = data?.active_model === modelId;
+    const confirmMessage = isCurrentlyActive
+      ? `"${modelName}" is currently loaded in GPU VRAM.\n\nDeleting will unload it and remove all downloaded files from disk to free space. Proceed?`
+      : `Are you sure you want to delete "${modelName}" from disk?\nThis will remove downloaded files to free space.`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setActionLoading(`delete-${modelId}`);
+    setErrorMsg(null);
+    try {
+      await api.deleteModel(modelId);
+      if (isCurrentlyActive) {
+        onModelChanged?.(null);
+      }
+      await fetchModels();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Delete failed';
+      setErrorMsg(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const models = data?.models ?? [];
   const activeModelId = data?.active_model;
 
   const filteredModels = models.filter((m) => {
     if (filter === 'downloaded') return m.is_downloaded;
-    if (filter === 'available') return !m.is_downloaded && !m.is_downloading;
-    if (filter === 'downloading') return m.is_downloading;
+    if (filter === 'available') return !m.is_downloaded && !m.is_downloading && !m.is_paused;
+    if (filter === 'downloading') return m.is_downloading || m.is_paused;
     return true;
   });
 
   const downloadedCount = models.filter((m) => m.is_downloaded).length;
-  const downloadingCount = models.filter((m) => m.is_downloading).length;
+  const inProgressCount = models.filter((m) => m.is_downloading || m.is_paused).length;
+  const downloadingActiveCount = models.filter((m) => m.is_downloading).length;
 
   return (
     <Modal open={open} title="AI Model Library (Steam Style)" onClose={onClose}>
-      <div className="flex flex-col h-[520px] -mx-4 -my-3 select-none">
+      <div className="flex flex-col h-[540px] -mx-4 -my-3 select-none">
         {/* Steam-Style Top Dashboard Bar */}
         <header className="border-b border-sloth-border bg-sloth-surface/40 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -168,9 +221,9 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
                   : 'text-sloth-subtle hover:text-sloth-text hover:bg-sloth-surface/50'
               }`}
             >
-              Ready to Play ({downloadedCount})
+              Installed ({downloadedCount})
             </button>
-            {downloadingCount > 0 && (
+            {inProgressCount > 0 && (
               <button
                 onClick={() => setFilter('downloading')}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
@@ -179,8 +232,12 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
                     : 'text-sloth-accent hover:bg-sloth-surface/50'
                 }`}
               >
-                <RefreshCw size={12} className="animate-spin" />
-                Downloading ({downloadingCount})
+                {downloadingActiveCount > 0 ? (
+                  <RefreshCw size={12} className="animate-spin" />
+                ) : (
+                  <Pause size={12} className="text-amber-500" />
+                )}
+                Queue ({inProgressCount})
               </button>
             )}
             <button
@@ -232,8 +289,12 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
               const isActive = model.is_active;
               const isDownloaded = model.is_downloaded;
               const isDownloading = model.is_downloading;
+              const isPaused = Boolean(model.is_paused);
               const isActivating = actionLoading === `activate-${model.id}`;
               const isStartingDownload = actionLoading === `download-${model.id}`;
+              const isPausing = actionLoading === `pause-${model.id}`;
+              const isResuming = actionLoading === `resume-${model.id}`;
+              const isDeleting = actionLoading === `delete-${model.id}`;
 
               return (
                 <div
@@ -243,6 +304,10 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
                       ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-500/5'
                       : isDownloaded
                       ? 'border-sloth-border bg-sloth-surface/30 hover:border-sloth-accent/40 hover:bg-sloth-surface/50'
+                      : isDownloading
+                      ? 'border-sloth-accent/40 bg-sloth-accent/5'
+                      : isPaused
+                      ? 'border-amber-500/40 bg-amber-500/5'
                       : 'border-sloth-border/70 bg-sloth-surface/15 hover:border-sloth-border'
                   }`}
                 >
@@ -263,6 +328,12 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             ACTIVE IN GPU
+                          </span>
+                        )}
+                        {isPaused && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 text-[10px] font-semibold text-amber-500">
+                            <Pause size={10} />
+                            PAUSED ({model.download_progress}%)
                           </span>
                         )}
                       </div>
@@ -305,42 +376,151 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
                           )}
                         </div>
                       )}
+
+                      {/* Paused Progress Bar */}
+                      {isPaused && (
+                        <div className="mt-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-sloth-subtle">
+                            <span className="flex items-center gap-1.5 text-amber-500 font-medium">
+                              <Pause size={12} />
+                              Download Paused
+                            </span>
+                            <span className="font-mono text-amber-500">{model.download_progress}%</span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-sloth-panel border border-amber-500/30">
+                            <div
+                              className="h-full bg-amber-500 transition-all duration-500"
+                              style={{ width: `${Math.max(5, model.download_progress)}%` }}
+                            />
+                          </div>
+                          {model.download_message && (
+                            <p className="text-[11px] text-sloth-subtle font-mono">{model.download_message}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Right Steam-Style Action Button */}
+                    {/* Right Steam-Style Action Button Group */}
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       {isActive ? (
                         <div className="flex items-center gap-2">
                           <span className="flex items-center gap-1 text-xs text-emerald-500 font-medium px-2 py-1">
                             <Check size={14} /> Running
                           </span>
+                          <button
+                            onClick={() => handleDelete(model.id, model.name)}
+                            disabled={isDeleting}
+                            className="flex items-center gap-1.5 rounded-xl border border-sloth-border bg-sloth-surface px-3 py-2 text-xs text-sloth-subtle hover:bg-sloth-danger/10 hover:text-sloth-danger hover:border-sloth-danger/40 transition disabled:opacity-50"
+                            title="Unload and delete model files from disk"
+                          >
+                            {isDeleting ? (
+                              <RefreshCw size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
                         </div>
                       ) : isDownloaded ? (
-                        <button
-                          onClick={() => handleActivate(model.id)}
-                          disabled={isActivating}
-                          className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                        >
-                          {isActivating ? (
-                            <>
-                              <RefreshCw size={14} className="animate-spin" />
-                              <span>LOADING TO GPU...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Play size={14} className="fill-current" />
-                              <span>ACTIVATE MODEL</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleActivate(model.id)}
+                            disabled={isActivating || isDeleting}
+                            className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                          >
+                            {isActivating ? (
+                              <>
+                                <RefreshCw size={14} className="animate-spin" />
+                                <span>LOADING TO GPU...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play size={14} className="fill-current" />
+                                <span>ACTIVATE MODEL</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(model.id, model.name)}
+                            disabled={isDeleting || isActivating}
+                            className="flex items-center gap-1.5 rounded-xl border border-sloth-border bg-sloth-surface px-3 py-2.5 text-xs text-sloth-subtle hover:bg-sloth-danger/10 hover:text-sloth-danger hover:border-sloth-danger/40 transition disabled:opacity-50"
+                            title="Delete downloaded model files from disk to free space"
+                          >
+                            {isDeleting ? (
+                              <RefreshCw size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        </div>
                       ) : isDownloading ? (
-                        <button
-                          disabled
-                          className="flex items-center gap-2 rounded-xl border border-sloth-border bg-sloth-surface/50 px-4 py-2.5 text-xs font-medium text-sloth-subtle opacity-70 cursor-wait"
-                        >
-                          <RefreshCw size={13} className="animate-spin" />
-                          <span>DOWNLOADING...</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handlePause(model.id)}
+                            disabled={isPausing}
+                            className="flex items-center gap-1.5 rounded-xl border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 text-xs font-bold text-amber-500 shadow-sm transition hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                            title="Pause download"
+                          >
+                            {isPausing ? (
+                              <>
+                                <RefreshCw size={13} className="animate-spin" />
+                                <span>PAUSING...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Pause size={13} />
+                                <span>PAUSE</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(model.id, model.name)}
+                            disabled={isDeleting}
+                            className="flex items-center gap-1 rounded-xl border border-sloth-border bg-sloth-surface p-2 text-xs text-sloth-subtle hover:bg-sloth-danger/10 hover:text-sloth-danger hover:border-sloth-danger/40 transition disabled:opacity-50"
+                            title="Cancel download and delete partial files"
+                          >
+                            {isDeleting ? (
+                              <RefreshCw size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                          </button>
+                        </div>
+                      ) : isPaused ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleResume(model.id)}
+                            disabled={isResuming || isDeleting}
+                            className="flex items-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-md transition hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                            title="Resume download"
+                          >
+                            {isResuming ? (
+                              <>
+                                <RefreshCw size={14} className="animate-spin" />
+                                <span>RESUMING...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play size={14} className="fill-current" />
+                                <span>RESUME</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(model.id, model.name)}
+                            disabled={isDeleting || isResuming}
+                            className="flex items-center gap-1.5 rounded-xl border border-sloth-border bg-sloth-surface px-3 py-2.5 text-xs text-sloth-subtle hover:bg-sloth-danger/10 hover:text-sloth-danger hover:border-sloth-danger/40 transition disabled:opacity-50"
+                            title="Cancel and remove partial files"
+                          >
+                            {isDeleting ? (
+                              <RefreshCw size={13} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={13} />
+                            )}
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleDownload(model.id)}

@@ -32,4 +32,23 @@ describe('AI routes', () => {
     expect(resNoInstruction.status).toBe(400);
     expect(resNoInstruction.body.error.code).toBe('INVALID_INPUT');
   });
+
+  it('validates model pause, resume, and delete payloads', async () => {
+    const app = createApp();
+
+    // /models/pause without model_id
+    const resPause = await request(app).post('/api/ai/models/pause').send({});
+    expect(resPause.status).toBe(400);
+    expect(resPause.body.error.code).toBe('INVALID_INPUT');
+
+    // /models/resume without model_id
+    const resResume = await request(app).post('/api/ai/models/resume').send({});
+    expect(resResume.status).toBe(400);
+    expect(resResume.body.error.code).toBe('INVALID_INPUT');
+
+    // /models/delete without model_id
+    const resDelete = await request(app).post('/api/ai/models/delete').send({});
+    expect(resDelete.status).toBe(400);
+    expect(resDelete.body.error.code).toBe('INVALID_INPUT');
+  });
 });

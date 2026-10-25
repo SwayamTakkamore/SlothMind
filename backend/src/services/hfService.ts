@@ -74,6 +74,45 @@ export async function downloadModel(model_id: string) {
   return await res.json();
 }
 
+export async function pauseModelDownload(model_id: string) {
+  const res = await fetch(`${HF_SERVICE_URL}/models/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Pause failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
+export async function resumeModelDownload(model_id: string) {
+  const res = await fetch(`${HF_SERVICE_URL}/models/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Resume failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
+export async function deleteModel(model_id: string) {
+  const res = await fetch(`${HF_SERVICE_URL}/models/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Delete model failed: ${res.status} ${text}`);
+  }
+  return await res.json();
+}
+
 export async function getDownloadStatus() {
   const res = await fetch(`${HF_SERVICE_URL}/models/download-status`);
   if (!res.ok) throw new Error(`Download status fetch failed: ${res.status}`);

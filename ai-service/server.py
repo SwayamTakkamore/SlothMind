@@ -11,7 +11,10 @@ import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from huggingface_hub import scan_cache_dir, snapshot_download, try_to_load_from_cache
+import shutil
+import subprocess
+from pathlib import Path
+from huggingface_hub import constants, scan_cache_dir, snapshot_download, try_to_load_from_cache
 from pydantic import BaseModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
@@ -155,24 +158,63 @@ def init_hardware():
         device_info = {"device": "cpu", "gpu": None, "total_vram_mb": 0}
     print(f"Hardware initialized: {device_info}", file=sys.stderr)
 
-def is_model_downloaded(repo_id: str) -> tuple[bool, int]:
-    """Returns (is_downloaded, size_in_bytes)"""
+def is_model_downloaded(repo_id: str, expected_size_gb: Optional[float] = None) -> tuple[bool, int]:
+    """Returns (is_downloaded, size_in_bytes) with strict integrity check.
+    Never returns True for partial/half-downloaded files."""
     try:
-        has_weights = (
-            try_to_load_from_cache(repo_id, "model.safetensors") is not None
-            or try_to_load_from_cache(repo_id, "model.safetensors.index.json") is not None
-            or try_to_load_from_cache(repo_id, "pytorch_model.bin") is not None
-        )
-        cache = scan_cache_dir()
-        disk_size = 0
-        for r in cache.repos:
-            if r.repo_id == repo_id:
-                disk_size = r.size_on_disk
-                # Consider downloaded if weights are confirmed or repo size > 150MB
-                if disk_size > 150 * 1024 * 1024:
-                    has_weights = True
-                break
-        return has_weights, disk_size
+        repo_folder_name = "models--" + repo_id.replace("/", "--")
+        repo_path = Path(constants.HUGGINGFACE_HUB_CACHE) / repo_folder_name
+        if not repo_path.exists():
+            return False, 0
+
+        total_bytes = 0
+        seen_inodes = set()
+        for p in repo_path.rglob("*"):
+            try:
+                real_p = p.resolve()
+                if real_p.is_file():
+                    stat = real_p.stat()
+                    if stat.st_ino not in seen_inodes:
+                        seen_inodes.add(stat.st_ino)
+                        total_bytes += stat.st_size
+            except Exception:
+                pass
+
+        marker_file = repo_path / ".slothmind_complete"
+
+        # Check safetensors or safetensors index or bin
+        has_safetensors = try_to_load_from_cache(repo_id, "model.safetensors") is not None
+        index_file = try_to_load_from_cache(repo_id, "model.safetensors.index.json")
+        has_bin = try_to_load_from_cache(repo_id, "pytorch_model.bin") is not None
+
+        # If it's a sharded model with an index file
+        if index_file is not None:
+            try:
+                with open(index_file, "r") as f:
+                    idx_data = json.load(f)
+                weight_map = idx_data.get("weight_map", {})
+                shards = set(weight_map.values())
+                all_shards_exist = len(shards) > 0 and all(
+                    try_to_load_from_cache(repo_id, s) is not None for s in shards
+                )
+                if all_shards_exist:
+                    return True, total_bytes
+            except Exception:
+                pass
+            return False, total_bytes
+
+        if has_safetensors or has_bin:
+            if marker_file.exists():
+                return True, total_bytes
+            if expected_size_gb is not None:
+                target_bytes = expected_size_gb * (1024**3)
+                if total_bytes >= target_bytes * 0.70:
+                    return True, total_bytes
+            else:
+                if total_bytes > 100 * 1024 * 1024:
+                    return True, total_bytes
+
+        return False, total_bytes
     except Exception:
         return False, 0
 
@@ -193,73 +235,191 @@ def unload_current_model():
 def load_selected_model(model_id: str):
     global model, tokenizer, current_model_name, device
     print(f"Loading {model_id} onto {device}...", file=sys.stderr)
-    
+
+    meta = next((m for m in AVAILABLE_MODELS if m["id"] == model_id), None)
+    expected_gb = meta["size_gb"] if meta else None
+    downloaded, _ = is_model_downloaded(model_id, expected_gb)
+    if not downloaded:
+        raise ValueError(f"Model {model_id} is not fully downloaded. Please download it completely before activating.")
+
     # First unload existing model to free VRAM
     unload_current_model()
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=False)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        
+
     if device == "cuda":
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             dtype=torch.float16,
             device_map="auto",
-            local_files_only=False,
+            local_files_only=True,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             dtype=torch.float32,
-            local_files_only=False,
+            local_files_only=True,
         )
         model = model.to(device)
-        
+
     current_model_name = model_id
     print(f"Successfully loaded and activated {model_id}", file=sys.stderr)
 
-def background_download_task(model_id: str, total_gb: float):
-    global active_downloads
+# Background download tracking and subprocess management
+download_processes: Dict[str, subprocess.Popen] = {}
+active_downloads: Dict[str, dict] = {}
+
+def start_or_resume_download_task(model_id: str, total_gb: float):
+    global active_downloads, download_processes
     target_bytes = int(total_gb * 1024 * 1024 * 1024)
+
+    # If already running
+    p = download_processes.get(model_id)
+    if p and p.poll() is None:
+        return
+
+    # Check current bytes on disk
+    _, current_bytes = is_model_downloaded(model_id, total_gb)
+    initial_pct = min(95, max(0, int((current_bytes / target_bytes) * 100))) if target_bytes > 0 else 0
+
     active_downloads[model_id] = {
         "status": "downloading",
-        "progress": 5,
-        "downloaded_bytes": 0,
+        "progress": initial_pct,
+        "downloaded_bytes": current_bytes,
         "total_bytes": target_bytes,
-        "message": "Connecting to Hugging Face...",
+        "message": f"Resuming download at {initial_pct}%..." if initial_pct > 0 else "Connecting to Hugging Face...",
     }
-    
-    def monitor_progress():
-        while active_downloads.get(model_id, {}).get("status") == "downloading":
-            _, current_bytes = is_model_downloaded(model_id)
-            if current_bytes > 0:
-                pct = min(95, max(5, int((current_bytes / target_bytes) * 100)))
-                active_downloads[model_id]["progress"] = pct
-                active_downloads[model_id]["downloaded_bytes"] = current_bytes
-                active_downloads[model_id]["message"] = f"Downloaded {(current_bytes / (1024**3)):.2f} GB of {total_gb:.2f} GB ({pct}%)"
+
+    # Python runner script for snapshot_download with resume
+    py_code = f"""
+import sys
+from huggingface_hub import snapshot_download
+try:
+    snapshot_download(repo_id='{model_id}', resume_download=True)
+except Exception as e:
+    print(e, file=sys.stderr)
+    sys.exit(1)
+"""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", py_code],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    download_processes[model_id] = proc
+
+    def monitor():
+        while True:
+            poll = proc.poll()
+            if poll is not None:
+                # Process finished
+                if active_downloads.get(model_id, {}).get("status") == "paused":
+                    break
+
+                if poll == 0:
+                    is_complete, final_bytes = is_model_downloaded(model_id, total_gb)
+                    if is_complete:
+                        repo_folder_name = "models--" + model_id.replace("/", "--")
+                        repo_path = Path(constants.HUGGINGFACE_HUB_CACHE) / repo_folder_name
+                        try:
+                            (repo_path / ".slothmind_complete").touch()
+                        except Exception:
+                            pass
+                        active_downloads[model_id] = {
+                            "status": "completed",
+                            "progress": 100,
+                            "downloaded_bytes": final_bytes,
+                            "total_bytes": target_bytes,
+                            "message": "Download complete. Ready to activate!",
+                        }
+                    else:
+                        active_downloads[model_id] = {
+                            "status": "error",
+                            "progress": min(95, int((final_bytes / target_bytes) * 100)),
+                            "downloaded_bytes": final_bytes,
+                            "total_bytes": target_bytes,
+                            "message": "Download ended but files appear incomplete. Click Resume to retry.",
+                        }
+                else:
+                    stderr_msg = proc.stderr.read() if proc.stderr else "Process terminated"
+                    active_downloads[model_id] = {
+                        "status": "error",
+                        "progress": active_downloads.get(model_id, {}).get("progress", 0),
+                        "downloaded_bytes": active_downloads.get(model_id, {}).get("downloaded_bytes", 0),
+                        "total_bytes": target_bytes,
+                        "message": f"Download interrupted: {stderr_msg[:120]}",
+                    }
+                break
+
+            # Still downloading, calculate progress
+            _, cur_bytes = is_model_downloaded(model_id, total_gb)
+            pct = min(99, max(5, int((cur_bytes / target_bytes) * 100))) if target_bytes > 0 else 5
+            active_downloads[model_id]["progress"] = pct
+            active_downloads[model_id]["downloaded_bytes"] = cur_bytes
+            active_downloads[model_id]["message"] = f"Downloaded {(cur_bytes / (1024**3)):.2f} GB of {total_gb:.2f} GB ({pct}%)"
             time.sleep(1.0)
-            
-    monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
-    monitor_thread.start()
-    
+
+    t = threading.Thread(target=monitor, daemon=True)
+    t.start()
+
+def pause_download_task(model_id: str):
+    global active_downloads, download_processes
+    p = download_processes.pop(model_id, None)
+    if p and p.poll() is None:
+        try:
+            p.terminate()
+            p.wait(timeout=2.0)
+        except Exception:
+            try:
+                p.kill()
+            except Exception:
+                pass
+
+    cur_prog = active_downloads.get(model_id, {}).get("progress", 0)
+    cur_bytes = active_downloads.get(model_id, {}).get("downloaded_bytes", 0)
+    total_bytes = active_downloads.get(model_id, {}).get("total_bytes", 0)
+    active_downloads[model_id] = {
+        "status": "paused",
+        "progress": cur_prog,
+        "downloaded_bytes": cur_bytes,
+        "total_bytes": total_bytes,
+        "message": f"Download paused at {cur_prog}%. Click Resume to continue.",
+    }
+
+def delete_model_from_disk(model_id: str):
+    global active_downloads, download_processes, current_model_name
+    if current_model_name == model_id:
+        unload_current_model()
+
+    p = download_processes.pop(model_id, None)
+    if p and p.poll() is None:
+        try:
+            p.terminate()
+            p.wait(timeout=2.0)
+        except Exception:
+            try:
+                p.kill()
+            except Exception:
+                pass
+
     try:
-        snapshot_download(repo_id=model_id)
-        _, final_bytes = is_model_downloaded(model_id)
-        active_downloads[model_id] = {
-            "status": "completed",
-            "progress": 100,
-            "downloaded_bytes": final_bytes,
-            "total_bytes": target_bytes,
-            "message": "Download complete. Ready to activate!",
-        }
-    except Exception as e:
-        active_downloads[model_id] = {
-            "status": "error",
-            "progress": 0,
-            "error": str(e),
-            "message": f"Download failed: {e}",
-        }
+        cache = scan_cache_dir()
+        for repo in cache.repos:
+            if repo.repo_id == model_id:
+                strategy = cache.delete_revisions(*[r.commit_hash for r in repo.revisions])
+                strategy.execute()
+    except Exception:
+        pass
+
+    repo_folder_name = "models--" + model_id.replace("/", "--")
+    repo_path = Path(constants.HUGGINGFACE_HUB_CACHE) / repo_folder_name
+    if repo_path.exists():
+        shutil.rmtree(repo_path, ignore_errors=True)
+
+    if model_id in active_downloads:
+        del active_downloads[model_id]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -267,6 +427,13 @@ async def lifespan(app: FastAPI):
     # NO MODEL IS LOADED BY DEFAULT.
     yield
     unload_current_model()
+    # Clean up any running download processes
+    for proc in download_processes.values():
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
 
 app = FastAPI(title="SlothMind HuggingFace Local Service", version="2.0.0", lifespan=lifespan)
 
@@ -296,18 +463,24 @@ async def get_models():
     results = []
     for m in AVAILABLE_MODELS:
         m_id = m["id"]
-        downloaded, size_on_disk = is_model_downloaded(m_id)
+        downloaded, size_on_disk = is_model_downloaded(m_id, m["size_gb"])
         dl_info = active_downloads.get(m_id)
         
         is_dl = dl_info is not None and dl_info.get("status") == "downloading"
-        dl_pct = dl_info.get("progress", 0) if dl_info else 0
-        
+        is_paused = dl_info is not None and dl_info.get("status") == "paused"
+        dl_status = dl_info.get("status") if dl_info else ("downloaded" if downloaded else "available")
+        dl_pct = dl_info.get("progress", 0) if dl_info else (100 if downloaded else 0)
+        if dl_status == "completed" and downloaded:
+            dl_status = "downloaded"
+            dl_pct = 100
+
         results.append({
             **m,
             "is_downloaded": downloaded,
             "is_downloading": is_dl,
+            "is_paused": is_paused,
             "download_progress": dl_pct,
-            "download_status": dl_info.get("status") if dl_info else ("downloaded" if downloaded else "available"),
+            "download_status": dl_status,
             "download_message": dl_info.get("message") if dl_info else None,
             "is_active": m_id == current_model_name,
             "disk_size_bytes": size_on_disk,
@@ -351,13 +524,35 @@ async def download_model_endpoint(request: DownloadModelRequest):
     if active_downloads.get(m_id, {}).get("status") == "downloading":
         return {"status": "in_progress", "model_id": m_id, "message": "Download is already in progress"}
         
-    thread = threading.Thread(
-        target=background_download_task,
-        args=(m_id, model_meta["size_gb"]),
-        daemon=True,
-    )
-    thread.start()
+    start_or_resume_download_task(m_id, model_meta["size_gb"])
     return {"status": "started", "model_id": m_id, "message": f"Download initiated for {m_id}"}
+
+@app.post("/models/pause")
+async def pause_model_endpoint(request: DownloadModelRequest):
+    m_id = request.model_id
+    valid = any(m["id"] == m_id for m in AVAILABLE_MODELS)
+    if not valid:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {m_id}")
+    pause_download_task(m_id)
+    return {"status": "ok", "model_id": m_id, "message": f"Paused download for {m_id}"}
+
+@app.post("/models/resume")
+async def resume_model_endpoint(request: DownloadModelRequest):
+    m_id = request.model_id
+    model_meta = next((m for m in AVAILABLE_MODELS if m["id"] == m_id), None)
+    if not model_meta:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {m_id}")
+    start_or_resume_download_task(m_id, model_meta["size_gb"])
+    return {"status": "ok", "model_id": m_id, "message": f"Resumed download for {m_id}"}
+
+@app.post("/models/delete")
+async def delete_model_endpoint(request: DownloadModelRequest):
+    m_id = request.model_id
+    valid = any(m["id"] == m_id for m in AVAILABLE_MODELS)
+    if not valid:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {m_id}")
+    delete_model_from_disk(m_id)
+    return {"status": "ok", "model_id": m_id, "message": f"Successfully deleted {m_id} from library"}
 
 @app.get("/models/download-status")
 async def download_status_endpoint():

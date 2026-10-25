@@ -98,6 +98,21 @@ export const api = {
     headers: JSON_HEADERS,
     body: JSON.stringify({ model_id }),
   }),
+  pauseModel: (model_id: string) => request<{ status: string; model_id: string }>('/api/ai/models/pause', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ model_id }),
+  }),
+  resumeModel: (model_id: string) => request<{ status: string; model_id: string }>('/api/ai/models/resume', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ model_id }),
+  }),
+  deleteModel: (model_id: string) => request<{ status: string; model_id: string }>('/api/ai/models/delete', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ model_id }),
+  }),
   getDownloadStatus: () => request<{ downloads: Record<string, unknown> }>('/api/ai/models/download-status'),
   notionAI: (req: NotionAIRequest) => request<NotionAIResponse>('/api/ai/notion-ai', {
     method: 'POST',

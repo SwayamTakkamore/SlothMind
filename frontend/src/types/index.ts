@@ -91,8 +91,9 @@ export interface ModelInfo {
   tags: string[];
   is_downloaded: boolean;
   is_downloading: boolean;
+  is_paused?: boolean;
   download_progress: number;
-  download_status: 'available' | 'downloading' | 'completed' | 'error';
+  download_status: 'available' | 'downloading' | 'paused' | 'completed' | 'error' | 'downloaded';
   download_message?: string | null;
   is_active: boolean;
   disk_size_bytes: number;
