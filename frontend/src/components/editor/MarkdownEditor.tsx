@@ -14,6 +14,7 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { Extension, InputRule } from '@tiptap/core';
 import {
   AlignCenter,
+  ArrowUp,
   AlignJustify,
   Bold,
   CheckSquare,
@@ -1931,6 +1932,28 @@ export function MarkdownEditor({
                 }`}
                 onClick={() => editor?.commands.focus()}
               >
+                {value.trim().length === 0 && editorMode === 'dynamic' && (
+                  <div className="flex flex-col items-center justify-center pt-24 pb-8 select-none animate-in fade-in duration-200">
+                    <h1 className="text-4xl font-extrabold text-sloth-subtle/30 mb-6 tracking-tight">New page</h1>
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenNotionAI?.();
+                      }}
+                      className="group flex w-full max-w-md items-center gap-3 rounded-full border border-sloth-border/80 bg-sloth-surface/50 px-4 py-2.5 shadow-md backdrop-blur-sm transition-all hover:border-purple-500/50 hover:bg-sloth-surface/80 hover:shadow-lg cursor-pointer"
+                    >
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sloth-panel border border-sloth-border text-xs shadow-xs group-hover:scale-105 transition-transform">
+                        <span>🦥</span>
+                      </div>
+                      <span className="flex-1 text-xs text-sloth-subtle group-hover:text-sloth-text transition-colors">
+                        Edit with AI
+                      </span>
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sloth-panel border border-sloth-border text-sloth-subtle group-hover:text-purple-400 group-hover:border-purple-500/40 transition-colors">
+                        <ArrowUp size={13} />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {editorMode === 'dynamic' ? (
                   <EditorContent editor={editor} className="min-h-full" />
                 ) : (

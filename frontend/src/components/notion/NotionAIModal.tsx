@@ -1,14 +1,13 @@
 import {
   AlertCircle,
   ArrowRight,
+  ArrowUp,
   Bot,
   Check,
   Copy,
-  CornerDownLeft,
   FileText,
   RefreshCw,
   RotateCcw,
-  Send,
   Sparkles,
   Trash2,
   User,
@@ -247,7 +246,7 @@ export function NotionAIModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const hasSelection = Boolean(selectedText && selectedText.trim().length > 0);
@@ -327,8 +326,8 @@ export function NotionAIModal({
     [inputPrompt, activeModelName, useSelectionContext, hasSelection, selectedText, activeNoteContent]
   );
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleSendMessage();
     }
@@ -354,72 +353,23 @@ export function NotionAIModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 select-none animate-in fade-in duration-150">
-      <div className="relative flex flex-col w-full max-w-2xl h-[640px] max-h-[90vh] rounded-2xl border border-sloth-border bg-sloth-panel shadow-2xl overflow-hidden">
-        {/* Chatbot Top Header */}
-        <header className="flex items-center justify-between border-b border-sloth-border px-4 py-3 bg-sloth-surface/40 backdrop-blur-md">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-md">
-              <Bot size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-sloth-text">Sloth AI Chatbot</span>
-                <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
-                  Intent-Driven
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-sloth-subtle mt-0.5">
-                {activeModelName ? (
-                  <span className="text-emerald-500 font-medium flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Model: {activeModelName.split('/')[1] || activeModelName}
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => {
-                      onClose();
-                      onOpenModelLibrary?.();
-                    }}
-                    className="text-amber-500 underline font-medium hover:text-amber-400 cursor-pointer"
-                  >
-                    No model active — Open Model Library
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {messages.length > 0 && (
-              <button
-                onClick={handleClearChat}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text transition cursor-pointer"
-                title="Clear conversation"
-              >
-                <Trash2 size={13} />
-                <span className="hidden sm:inline">Clear</span>
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text cursor-pointer"
-              title="Close Chatbot (Esc)"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </header>
-
-        {/* Selection Context Chip Banner */}
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 sm:pt-28 bg-black/60 backdrop-blur-sm p-4 select-none animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="relative flex flex-col w-full max-w-xl animate-in zoom-in-95 duration-150 space-y-2">
+        {/* Selection Context Tag (if text was highlighted) */}
         {hasSelection && (
-          <div className="flex items-center justify-between border-b border-sloth-border/80 bg-purple-500/10 px-4 py-1.5 text-xs text-purple-700 dark:text-purple-300">
+          <div className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-500/10 px-3.5 py-1 text-xs text-purple-600 dark:text-purple-300 backdrop-blur-md">
             <div className="flex items-center gap-2 min-w-0">
-              <FileText size={13} className="shrink-0 text-purple-500" />
-              <span className="font-semibold shrink-0">Selected Text:</span>
-              <span className="truncate italic opacity-90 max-w-[340px]">
-                &quot;{selectedText.trim().slice(0, 65)}{selectedText.trim().length > 65 ? '...' : ''}&quot;
+              <FileText size={12} className="shrink-0 text-purple-500" />
+              <span className="font-semibold shrink-0">Selected:</span>
+              <span className="truncate italic opacity-90 max-w-[320px]">
+                &quot;{selectedText.trim().slice(0, 55)}{selectedText.trim().length > 55 ? '...' : ''}&quot;
               </span>
               <span className="text-[10px] opacity-75 shrink-0">
                 ({selectedText.trim().split(/\s+/).length} words)
@@ -428,262 +378,281 @@ export function NotionAIModal({
 
             <button
               onClick={() => setUseSelectionContext(!useSelectionContext)}
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded transition ${
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded transition ${
                 useSelectionContext
                   ? 'bg-purple-600 text-white'
                   : 'bg-sloth-surface text-sloth-subtle hover:text-sloth-text'
               }`}
-              title="Toggle whether Sloth AI attaches this selection to prompts"
             >
-              {useSelectionContext ? 'Using Selection' : 'Ignored'}
+              {useSelectionContext ? 'Using Context' : 'Ignored'}
             </button>
           </div>
         )}
+
+        {/* Minimal Pill Input (Exact aesthetic from user screenshot) */}
+        <div className="group relative flex items-center gap-3 rounded-full border border-sloth-border bg-sloth-panel/95 px-3.5 py-2 shadow-2xl backdrop-blur-xl transition-all hover:border-sloth-border/80 focus-within:border-purple-500/70 focus-within:ring-2 focus-within:ring-purple-500/20">
+          {/* Left Avatar / Logo Circle */}
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sloth-surface border border-sloth-border text-xs shadow-xs">
+            <span>🦥</span>
+          </div>
+
+          {/* Main Input */}
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputPrompt}
+            onChange={(e) => setInputPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              hasSelection && useSelectionContext
+                ? 'Edit with AI (e.g. summarize, shorten, fix grammar)...'
+                : 'Edit with AI'
+            }
+            disabled={isGenerating}
+            className="flex-1 bg-transparent text-xs text-sloth-text outline-none placeholder:text-sloth-subtle leading-relaxed"
+          />
+
+          {/* Model Status Pill or Open Library */}
+          <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-sloth-subtle">
+            {activeModelName ? (
+              <span className="flex items-center gap-1 text-emerald-500 font-medium">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {activeModelName.split('/')[1] || activeModelName}
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenModelLibrary?.();
+                }}
+                className="text-amber-500 hover:text-amber-400 underline font-medium cursor-pointer"
+              >
+                No model
+              </button>
+            )}
+          </div>
+
+          {/* Right Circular Up-Arrow Button (↑) */}
+          <button
+            onClick={() => handleSendMessage()}
+            disabled={!inputPrompt.trim() || isGenerating}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition cursor-pointer ${
+              inputPrompt.trim() && !isGenerating
+                ? 'bg-purple-600 text-white shadow-sm hover:bg-purple-500 scale-105'
+                : 'bg-sloth-surface border border-sloth-border/60 text-sloth-subtle opacity-40 hover:opacity-70'
+            }`}
+            title="Submit with AI (Enter)"
+          >
+            {isGenerating ? (
+              <RefreshCw size={12} className="animate-spin text-purple-400" />
+            ) : (
+              <ArrowUp size={13} strokeWidth={2.5} />
+            )}
+          </button>
+
+          {/* Small Close Button */}
+          <button
+            onClick={onClose}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-sloth-subtle hover:text-sloth-text hover:bg-sloth-surface transition cursor-pointer"
+            title="Close (Esc)"
+          >
+            <X size={12} />
+          </button>
+        </div>
 
         {/* Error Alert */}
         {errorMsg && (
-          <div className="mx-4 mt-3 flex items-center justify-between rounded-xl border border-sloth-danger/30 bg-sloth-danger/10 px-3 py-2 text-xs text-sloth-danger">
+          <div className="flex items-center justify-between rounded-xl border border-sloth-danger/30 bg-sloth-danger/10 px-3 py-2 text-xs text-sloth-danger animate-in fade-in">
             <div className="flex items-center gap-2">
-              <AlertCircle size={14} className="shrink-0" />
+              <AlertCircle size={13} className="shrink-0" />
               <span>{errorMsg}</span>
             </div>
-            <button onClick={() => setErrorMsg(null)}>
-              <X size={13} />
+            <button onClick={() => setErrorMsg(null)} className="hover:opacity-80">
+              <X size={12} />
             </button>
           </div>
         )}
 
-        {/* Chat Feed */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 select-text">
-          {messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center p-6 space-y-4">
-              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-lg">
-                <Sparkles size={28} />
+        {/* Empty State Suggestion Chips (Minimal inspiration, not crowded) */}
+        {messages.length === 0 && !isGenerating && (
+          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 text-[11px] select-none animate-in fade-in">
+            <button
+              onClick={() => handleSendMessage(hasSelection ? 'Summarize this selection' : 'Summarize note')}
+              className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel/80 px-2.5 py-1 text-sloth-subtle hover:text-sloth-text hover:border-purple-500/40 hover:bg-sloth-surface transition cursor-pointer"
+            >
+              <span>📝 Summarize</span>
+            </button>
+            <button
+              onClick={() => handleSendMessage('Extract all action items')}
+              className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel/80 px-2.5 py-1 text-sloth-subtle hover:text-sloth-text hover:border-purple-500/40 hover:bg-sloth-surface transition cursor-pointer"
+            >
+              <span>📋 Action items</span>
+            </button>
+            <button
+              onClick={() => handleSendMessage('Fix grammar and spelling')}
+              className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel/80 px-2.5 py-1 text-sloth-subtle hover:text-sloth-text hover:border-purple-500/40 hover:bg-sloth-surface transition cursor-pointer"
+            >
+              <span>✨ Fix grammar</span>
+            </button>
+            <button
+              onClick={() => handleSendMessage('Brainstorm 5 ideas')}
+              className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel/80 px-2.5 py-1 text-sloth-subtle hover:text-sloth-text hover:border-purple-500/40 hover:bg-sloth-surface transition cursor-pointer"
+            >
+              <span>💡 Brainstorm</span>
+            </button>
+          </div>
+        )}
+
+        {/* Conversation Responses Card */}
+        {(messages.length > 0 || isGenerating) && (
+          <div className="flex flex-col max-h-[460px] overflow-hidden rounded-2xl border border-sloth-border bg-sloth-panel/95 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-150">
+            {/* Conversation Header with Clear */}
+            <div className="flex items-center justify-between border-b border-sloth-border/70 px-4 py-2 bg-sloth-surface/40 text-[11px] text-sloth-subtle">
+              <div className="flex items-center gap-2">
+                <Sparkles size={12} className="text-purple-500" />
+                <span className="font-semibold text-sloth-text">Sloth AI Assistant</span>
+                {currentIntent && (
+                  <span className="rounded bg-purple-500/15 px-1.5 py-0.2 text-[9px] font-medium text-purple-600 dark:text-purple-400">
+                    {currentIntent.badge}
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-1 max-w-md">
-                <h3 className="text-base font-bold text-sloth-text">How can I help with your notes today?</h3>
-                <p className="text-xs text-sloth-subtle leading-relaxed">
-                  Type whatever you need. Sloth AI uses intent recognition to automatically draft, summarize, fix grammar, extract checklists, or translate.
-                </p>
-              </div>
-
-              {/* 4 Clean Quick Suggestion Chips */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-2 max-w-lg">
+              {messages.length > 0 && (
                 <button
-                  onClick={() => handleSendMessage(hasSelection ? 'Summarize this selection' : 'Summarize active note')}
-                  className="flex items-center gap-1.5 rounded-full border border-sloth-border bg-sloth-surface/70 px-3 py-1.5 text-xs text-sloth-text hover:border-purple-500/50 hover:bg-sloth-surface transition cursor-pointer"
+                  onClick={handleClearChat}
+                  className="flex items-center gap-1 text-[10px] text-sloth-subtle hover:text-sloth-text transition cursor-pointer"
+                  title="Clear chat"
                 >
-                  <span>📝 Summarize</span>
+                  <Trash2 size={11} />
+                  <span>Clear</span>
                 </button>
-                <button
-                  onClick={() => handleSendMessage('Extract all action items into a checklist')}
-                  className="flex items-center gap-1.5 rounded-full border border-sloth-border bg-sloth-surface/70 px-3 py-1.5 text-xs text-sloth-text hover:border-purple-500/50 hover:bg-sloth-surface transition cursor-pointer"
-                >
-                  <span>📋 Extract Action Items</span>
-                </button>
-                <button
-                  onClick={() => handleSendMessage('Fix grammar, typos, and spelling')}
-                  className="flex items-center gap-1.5 rounded-full border border-sloth-border bg-sloth-surface/70 px-3 py-1.5 text-xs text-sloth-text hover:border-purple-500/50 hover:bg-sloth-surface transition cursor-pointer"
-                >
-                  <span>✨ Fix Grammar</span>
-                </button>
-                <button
-                  onClick={() => handleSendMessage('Brainstorm 5 ideas')}
-                  className="flex items-center gap-1.5 rounded-full border border-sloth-border bg-sloth-surface/70 px-3 py-1.5 text-xs text-sloth-text hover:border-purple-500/50 hover:bg-sloth-surface transition cursor-pointer"
-                >
-                  <span>⚡ Brainstorm Ideas</span>
-                </button>
-              </div>
+              )}
             </div>
-          ) : (
-            messages.map((msg) => (
-              <div key={msg.id} className="space-y-1">
-                {msg.role === 'user' ? (
-                  /* User Message Bubble */
-                  <div className="flex justify-end">
-                    <div className="flex items-start gap-2 max-w-[85%]">
-                      <div className="rounded-2xl rounded-tr-none bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-xs text-white shadow-md">
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        {msg.intentBadge && (
-                          <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[10px] text-purple-200">
-                            <span className="rounded bg-black/20 px-1.5 py-0.5 font-medium">
-                              {msg.intentBadge}
-                            </span>
-                            <span>{msg.timestamp}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-600/20 text-purple-600 border border-purple-500/30">
-                        <User size={13} />
+
+            {/* Message Feed */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 select-text">
+              {messages.map((msg) => (
+                <div key={msg.id} className="space-y-1">
+                  {msg.role === 'user' ? (
+                    <div className="flex justify-end">
+                      <div className="flex items-start gap-2 max-w-[85%]">
+                        <div className="rounded-2xl rounded-tr-none bg-gradient-to-r from-purple-600 to-indigo-600 px-3.5 py-2 text-xs text-white shadow-sm">
+                          <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          {msg.intentBadge && (
+                            <div className="mt-1 flex items-center justify-end gap-1.5 text-[9px] text-purple-200">
+                              <span>{msg.intentBadge}</span>
+                              <span>•</span>
+                              <span>{msg.timestamp}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-600/20 text-purple-600 border border-purple-500/30 text-[10px]">
+                          <User size={12} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  /* Assistant Message Card */
-                  <div className="flex justify-start">
-                    <div className="flex items-start gap-2.5 max-w-[92%] w-full">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-sm mt-0.5">
-                        <Bot size={14} />
-                      </div>
+                  ) : (
+                    <div className="flex justify-start">
+                      <div className="flex items-start gap-2.5 max-w-[95%] w-full">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-xs mt-0.5">
+                          <Bot size={13} />
+                        </div>
 
-                      <div className="flex-1 space-y-2 rounded-2xl rounded-tl-none border border-sloth-border bg-sloth-surface/40 p-4 shadow-sm">
-                        {/* Header with intent and copy */}
-                        <div className="flex items-center justify-between border-b border-sloth-border/50 pb-2">
-                          <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
-                            <Wand2 size={13} />
-                            <span>{msg.intentBadge || 'Sloth AI Response'}</span>
-                          </span>
+                        <div className="flex-1 space-y-2 rounded-2xl rounded-tl-none border border-sloth-border bg-sloth-surface/40 p-3.5 shadow-xs">
+                          {/* Top badge and copy */}
+                          <div className="flex items-center justify-between border-b border-sloth-border/50 pb-1.5">
+                            <span className="flex items-center gap-1 text-xs font-semibold text-purple-600 dark:text-purple-400">
+                              <Wand2 size={12} />
+                              <span>{msg.intentBadge || 'Response'}</span>
+                            </span>
 
-                          <div className="flex items-center gap-1 text-[11px] text-sloth-subtle">
-                            <span>{msg.timestamp}</span>
                             <button
                               onClick={() => handleCopy(msg.id, msg.content)}
-                              className="ml-2 flex items-center gap-1 rounded px-2 py-0.5 text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text transition cursor-pointer"
+                              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text transition cursor-pointer"
                               title="Copy response"
                             >
                               {copiedId === msg.id ? (
-                                <Check size={12} className="text-emerald-500" />
+                                <Check size={11} className="text-emerald-500" />
                               ) : (
-                                <Copy size={12} />
+                                <Copy size={11} />
                               )}
                               <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
                             </button>
                           </div>
-                        </div>
 
-                        {/* Markdown Content */}
-                        <article className="prose prose-sloth max-w-none text-xs leading-relaxed text-sloth-text">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                        </article>
+                          {/* Rendered Markdown */}
+                          <article className="prose prose-sloth max-w-none text-xs leading-relaxed text-sloth-text">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          </article>
 
-                        {/* 1-Click Document Actions */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-sloth-border/50">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {hasSelection && useSelectionContext ? (
+                          {/* Quick 1-Click Action Buttons */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-sloth-border/50">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {hasSelection && useSelectionContext ? (
+                                <button
+                                  onClick={() => handleInsert(msg.content, 'replace-selection')}
+                                  className="flex items-center gap-1 rounded-lg bg-purple-600 hover:bg-purple-500 px-2.5 py-1 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+                                >
+                                  <Check size={11} />
+                                  <span>Replace Selection</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleInsert(msg.content, 'append')}
+                                  className="flex items-center gap-1 rounded-lg bg-purple-600 hover:bg-purple-500 px-2.5 py-1 text-xs font-semibold text-white shadow-xs transition cursor-pointer"
+                                >
+                                  <Check size={11} />
+                                  <span>Insert into Note</span>
+                                </button>
+                              )}
+
                               <button
-                                onClick={() => handleInsert(msg.content, 'replace-selection')}
-                                className="flex items-center gap-1 rounded-lg bg-purple-600 hover:bg-purple-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
+                                onClick={() => handleInsert(msg.content, 'insert-below')}
+                                className="flex items-center gap-1 rounded-lg border border-sloth-border bg-sloth-surface px-2 py-1 text-xs font-medium text-sloth-text hover:bg-sloth-panel transition cursor-pointer"
                               >
-                                <Check size={12} />
-                                <span>Replace Selection</span>
+                                <ArrowRight size={11} />
+                                <span>Insert Below</span>
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => handleInsert(msg.content, 'append')}
-                                className="flex items-center gap-1 rounded-lg bg-purple-600 hover:bg-purple-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
-                              >
-                                <Check size={12} />
-                                <span>Insert into Note</span>
-                              </button>
-                            )}
+                            </div>
 
                             <button
-                              onClick={() => handleInsert(msg.content, 'insert-below')}
-                              className="flex items-center gap-1 rounded-lg border border-sloth-border bg-sloth-surface px-2.5 py-1 text-xs font-medium text-sloth-text hover:bg-sloth-panel transition cursor-pointer"
+                              onClick={() => handleSendMessage(msg.content)}
+                              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-sloth-subtle hover:text-sloth-text hover:bg-sloth-surface transition cursor-pointer"
+                              title="Try again"
                             >
-                              <ArrowRight size={12} />
-                              <span>Insert Below</span>
+                              <RotateCcw size={11} />
+                              <span>Try again</span>
                             </button>
                           </div>
-
-                          <button
-                            onClick={() => handleSendMessage(msg.content)}
-                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-sloth-subtle hover:text-sloth-text hover:bg-sloth-surface transition cursor-pointer"
-                            title="Regenerate"
-                          >
-                            <RotateCcw size={12} />
-                            <span>Try again</span>
-                          </button>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-
-          {/* Generating Indicator */}
-          {isGenerating && (
-            <div className="flex justify-start">
-              <div className="flex items-start gap-2.5 max-w-[90%]">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-sm animate-pulse">
-                  <Sparkles size={14} className="animate-spin duration-1000" />
+                  )}
                 </div>
-                <div className="rounded-2xl rounded-tl-none border border-sloth-border bg-sloth-surface/40 px-4 py-3 text-xs shadow-sm space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-purple-600 dark:text-purple-400">
-                      Sloth AI is generating...
-                    </span>
-                    {currentIntent && (
-                      <span className="rounded bg-purple-500/15 px-1.5 py-0.2 text-[10px] font-medium text-purple-600 dark:text-purple-400">
-                        {currentIntent.badge}
+              ))}
+
+              {/* Generating Animation */}
+              {isGenerating && (
+                <div className="flex justify-start">
+                  <div className="flex items-start gap-2.5 max-w-[90%]">
+                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 text-white shadow-xs animate-pulse">
+                      <Sparkles size={13} className="animate-spin duration-1000" />
+                    </div>
+                    <div className="rounded-2xl rounded-tl-none border border-sloth-border bg-sloth-surface/40 px-3.5 py-2.5 text-xs shadow-xs space-y-1">
+                      <span className="font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                        <RefreshCw size={11} className="animate-spin" />
+                        Generating response...
                       </span>
-                    )}
+                    </div>
                   </div>
-                  <p className="text-[11px] text-sloth-subtle flex items-center gap-1">
-                    <RefreshCw size={10} className="animate-spin" />
-                    Running locally on your device
-                  </p>
                 </div>
-              </div>
+              )}
+
+              <div ref={messagesEndRef} />
             </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Chat Input Bar */}
-        <div className="border-t border-sloth-border p-3 bg-sloth-surface/30">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="space-y-1.5"
-          >
-            <div className="relative flex items-center">
-              <div className="absolute left-3 text-purple-500">
-                <Sparkles size={15} />
-              </div>
-
-              <textarea
-                ref={inputRef}
-                rows={1}
-                value={inputPrompt}
-                onChange={(e) => setInputPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  hasSelection && useSelectionContext
-                    ? 'Ask Sloth AI to edit, summarize, shorten, or format selection...'
-                    : 'Ask Sloth AI to write, summarize, brainstorm, or answer anything...'
-                }
-                disabled={isGenerating}
-                className="w-full resize-none rounded-xl border border-sloth-border bg-sloth-panel py-2.5 pl-9 pr-24 text-xs text-sloth-text placeholder:text-sloth-subtle focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 outline-none leading-relaxed"
-              />
-
-              <button
-                type="submit"
-                disabled={!inputPrompt.trim() || isGenerating}
-                className="absolute right-1.5 flex items-center gap-1 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40 cursor-pointer"
-              >
-                {isGenerating ? <RefreshCw size={12} className="animate-spin" /> : <Send size={12} />}
-                <span>Send</span>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between px-1 text-[10px] text-sloth-subtle select-none">
-              <span className="flex items-center gap-1">
-                <CornerDownLeft size={10} />
-                <span>Press Enter to send · Shift+Enter for new line</span>
-              </span>
-              <span className="text-purple-600 dark:text-purple-400 font-medium">
-                Intent recognized automatically
-              </span>
-            </div>
-          </form>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
