@@ -179,16 +179,6 @@ const DynamicMarkdownRules = Extension.create({
   name: 'dynamicMarkdownRules',
   addInputRules() {
     return [
-      // Typing '| ' at start of line creates a 3x3 table with header row
-      new InputRule({
-        find: /^\|\s$/,
-        handler: ({ chain, range }) => {
-          chain()
-            .deleteRange(range)
-            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-            .run();
-        },
-      }),
       // Typing '--- ' or '*** ' creates horizontal rule divider
       new InputRule({
         find: /^(?:---|\u2014-|___\s|\*\*\*\s)$/,
@@ -721,7 +711,7 @@ export function MarkdownEditor({
       }),
       DynamicMarkdownRules,
       Placeholder.configure({
-        placeholder: "Type '/' for commands, '#' for Heading, '| ' for Table, '---' for Divider, or Ctrl+J for Notion AI...",
+        placeholder: "Type '/' for commands, '#' for Heading, '---' for Divider, or Ctrl+J for Notion AI...",
         emptyEditorClass: 'is-editor-empty',
       }),
       Markdown.configure({
@@ -981,31 +971,6 @@ export function MarkdownEditor({
             return true;
           }
 
-          // Table header syntax: '| Col 1 | Col 2 |' or '| Header |'
-          if (currentLineText.startsWith('|') && currentLineText.endsWith('|')) {
-            const columns = currentLineText
-              .split('|')
-              .map((c) => c.trim())
-              .filter(Boolean);
-            if (columns.length >= 1) {
-              event.preventDefault();
-              editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-              editor.commands.insertTable({
-                rows: 2,
-                cols: columns.length,
-                withHeaderRow: true,
-              });
-              return true;
-            }
-          }
-
-          // Task list / Checkbox shortcuts: '[]', '[ ]'
-          if (currentLineText === '[]' || currentLineText === '[ ]') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.toggleTaskList();
-            return true;
-          }
         }
 
         return false;
@@ -1686,7 +1651,7 @@ export function MarkdownEditor({
               }
               disabled={!editor}
               className="flex items-center gap-1 rounded-lg px-2 py-1 transition text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text"
-              title="Insert Table (Type '| ' or '/table')"
+              title="Insert Table (/table)"
             >
               <TableIcon size={13} />
               <span className="text-[11px]">Table</span>

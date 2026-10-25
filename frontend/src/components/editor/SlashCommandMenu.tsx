@@ -162,7 +162,7 @@ export const SLASH_COMMANDS: CommandItem[] = [
     id: 'table',
     title: 'Table',
     description: 'Interactive 3x3 table with header row',
-    badge: '|',
+    badge: '/table',
     category: 'Media & Data',
     icon: <TableIcon size={16} className="text-blue-500" />,
     keywords: ['table', 'grid', 'column', 'row', 'cells', 'spreadsheet', 'database'],
