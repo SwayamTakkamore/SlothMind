@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { StatusBar } from './components/layout/StatusBar';
-import { EditorHeader } from './components/editor/EditorHeader';
+import { EditorHeader, type EditorViewMode } from './components/editor/EditorHeader';
 import { MarkdownEditor } from './components/editor/MarkdownEditor';
 import { SearchModal } from './components/search/SearchModal';
 import { VaultPicker } from './components/vault/VaultPicker';
@@ -47,7 +47,7 @@ export default function App() {
   const [activeNotePath, setActiveNotePath] = useState<string | null>(null);
   const [note, setNote] = useState<NoteContent | null>(null);
   const [content, setContent] = useState('');
-  const [preview, setPreview] = useState(false);
+  const [viewMode, setViewMode] = useState<EditorViewMode>('edit');
   const [loadingNote, setLoadingNote] = useState(false);
 
   const refreshTree = useCallback(() => setTreeKey((k) => k + 1), []);
@@ -85,7 +85,7 @@ export default function App() {
         if (cancelled) return;
         setNote(loaded);
         setContent(loaded.content);
-        setPreview(false);
+        setViewMode('edit');
       })
       .catch((err) => {
         console.error('Failed to load note', err);
@@ -163,8 +163,10 @@ export default function App() {
       <EditorHeader
         path={activeNotePath}
         saveStatus={autosave.status}
-        preview={preview}
-        onTogglePreview={() => setPreview((p) => !p)}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        preview={viewMode === 'preview'}
+        onTogglePreview={() => setViewMode((m) => (m === 'preview' ? 'edit' : 'preview'))}
         onSaveNow={() => void autosave.saveNow()}
         onOpenNotionAI={() => handleOpenNotionAI()}
       />
@@ -178,7 +180,9 @@ export default function App() {
             <MarkdownEditor
               value={content}
               onChange={setContent}
-              preview={preview}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              preview={viewMode === 'preview'}
               onOpenNotionAI={(selText) => handleOpenNotionAI(selText)}
               onQuickNotionAction={(action, selText) => {
                 handleOpenNotionAI(selText);

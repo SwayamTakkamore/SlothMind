@@ -1,11 +1,15 @@
-import { Check, Eye, EyeOff, FileText, Info, Save, Sparkles } from 'lucide-react';
+import { Check, Columns2, Eye, FileText, Info, PenLine, Save, Sparkles } from 'lucide-react';
 import type { SaveStatus } from '../../types';
+
+export type EditorViewMode = 'edit' | 'split' | 'preview';
 
 interface EditorHeaderProps {
   path: string | null;
   saveStatus: SaveStatus;
-  preview: boolean;
-  onTogglePreview: () => void;
+  preview?: boolean;
+  viewMode?: EditorViewMode;
+  onTogglePreview?: () => void;
+  onViewModeChange?: (mode: EditorViewMode) => void;
   onSaveNow: () => void;
   onOpenNotionAI?: () => void;
 }
@@ -22,12 +26,26 @@ function cleanTitle(path: string | null): { folder: string | null; title: string
 export function EditorHeader({
   path,
   saveStatus,
-  preview,
+  preview = false,
+  viewMode,
   onTogglePreview,
+  onViewModeChange,
   onSaveNow,
   onOpenNotionAI,
 }: EditorHeaderProps) {
   const { folder, title } = cleanTitle(path);
+  const currentMode: EditorViewMode = viewMode ?? (preview ? 'preview' : 'edit');
+
+  const handleModeClick = (newMode: EditorViewMode) => {
+    if (onViewModeChange) {
+      onViewModeChange(newMode);
+    } else if (onTogglePreview) {
+      // Fallback for simple boolean toggle
+      if ((newMode === 'preview' && !preview) || (newMode !== 'preview' && preview)) {
+        onTogglePreview();
+      }
+    }
+  };
 
   return (
     <header className="flex h-12 items-center justify-between border-b border-sloth-border px-6 select-none bg-sloth-panel/40 backdrop-blur-sm">
@@ -63,7 +81,7 @@ export function EditorHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         {onOpenNotionAI && (
           <button
             onClick={onOpenNotionAI}
@@ -88,19 +106,51 @@ export function EditorHeader({
           {saveStatus === 'saved' ? <Check size={14} className="text-sloth-success" /> : <Save size={14} />}
           <span>Save</span>
         </button>
-        <button
-          onClick={onTogglePreview}
-          disabled={!path}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs transition disabled:opacity-40 ${
-            preview
-              ? 'bg-sloth-accent/15 text-sloth-accent'
-              : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
-          }`}
-          title={preview ? 'Switch to Source Editor' : 'Switch to Markdown Preview'}
-        >
-          {preview ? <EyeOff size={14} /> : <Eye size={14} />}
-          <span>{preview ? 'Source' : 'Preview'}</span>
-        </button>
+
+        {/* View Mode Segmented Control: Edit, Split (Side-by-Side), Preview */}
+        <div className="flex items-center rounded-lg border border-sloth-border bg-sloth-surface/60 p-0.5">
+          <button
+            onClick={() => handleModeClick('edit')}
+            disabled={!path}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-40 ${
+              currentMode === 'edit'
+                ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:text-sloth-text'
+            }`}
+            title="Editor View (Full document editor)"
+          >
+            <PenLine size={13} />
+            <span>Edit</span>
+          </button>
+
+          <button
+            onClick={() => handleModeClick('split')}
+            disabled={!path}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-40 ${
+              currentMode === 'split'
+                ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:text-sloth-text'
+            }`}
+            title="Split View (Editor + Live Rendered Preview Side-by-Side)"
+          >
+            <Columns2 size={13} />
+            <span>Split</span>
+          </button>
+
+          <button
+            onClick={() => handleModeClick('preview')}
+            disabled={!path}
+            className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition disabled:opacity-40 ${
+              currentMode === 'preview'
+                ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:text-sloth-text'
+            }`}
+            title="Full Rendered Preview"
+          >
+            <Eye size={13} />
+            <span>Preview</span>
+          </button>
+        </div>
       </div>
     </header>
   );

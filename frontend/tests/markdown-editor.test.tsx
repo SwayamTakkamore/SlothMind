@@ -30,6 +30,7 @@ describe('MarkdownEditor Component', () => {
     // Mode toggles
     expect(screen.getByText('Dynamic')).toBeDefined();
     expect(screen.getByText('Raw')).toBeDefined();
+    expect(screen.getByText(/Centered/i)).toBeDefined();
   });
 
   it('can switch between Dynamic and Raw source mode', async () => {
@@ -59,6 +60,42 @@ describe('MarkdownEditor Component', () => {
 
     // Back in dynamic mode
     expect(screen.queryByPlaceholderText(/Start writing in Markdown/i)).toBeNull();
+  });
+
+  it('can toggle between centered document width and full width', async () => {
+    await act(async () => {
+      render(
+        <MarkdownEditor
+          value="Body text"
+          onChange={vi.fn()}
+          preview={false}
+        />
+      );
+    });
+
+    const widthButton = screen.getByText(/Centered/i);
+    await act(async () => {
+      fireEvent.click(widthButton);
+    });
+
+    expect(screen.getByText(/Full/i)).toBeDefined();
+  });
+
+  it('renders split view with both editor and live rendered preview side-by-side', async () => {
+    await act(async () => {
+      render(
+        <MarkdownEditor
+          value="# Split Title"
+          onChange={vi.fn()}
+          viewMode="split"
+        />
+      );
+    });
+
+    // Should display the live rendered preview column alongside the editor
+    expect(screen.getByText(/Live Rendered Preview/i)).toBeDefined();
+    // One in editor, one in live preview column
+    expect(screen.getAllByText('Split Title').length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders preview mode when preview prop is true', async () => {

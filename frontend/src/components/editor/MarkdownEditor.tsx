@@ -13,10 +13,14 @@ import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { Extension, InputRule } from '@tiptap/core';
 import {
+  AlignCenter,
+  AlignJustify,
   Bold,
   CheckSquare,
   Code,
   Columns,
+  Columns2,
+  Eye,
   FileCode,
   Heading1,
   Heading2,
@@ -26,6 +30,7 @@ import {
   List,
   ListOrdered,
   Minus,
+  PenLine,
   Quote,
   Rows,
   Sparkles,
@@ -37,10 +42,15 @@ import {
 } from 'lucide-react';
 import { NotionAIFloatingToolbar } from '../notion/NotionAIFloatingToolbar';
 
+export type EditorViewMode = 'edit' | 'split' | 'preview';
+export type EditorWidthMode = 'centered' | 'full';
+
 export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
-  preview: boolean;
+  preview?: boolean;
+  viewMode?: EditorViewMode;
+  onViewModeChange?: (mode: EditorViewMode) => void;
   onOpenNotionAI?: (selectedText?: string) => void;
   onQuickNotionAction?: (action: string, selectedText: string) => void;
 }
@@ -95,14 +105,27 @@ const DynamicMarkdownRules = Extension.create({
 export function MarkdownEditor({
   value,
   onChange,
-  preview,
+  preview = false,
+  viewMode,
+  onViewModeChange,
   onOpenNotionAI,
   onQuickNotionAction,
 }: MarkdownEditorProps) {
   const [selectedText, setSelectedText] = useState('');
   const [editorMode, setEditorMode] = useState<'dynamic' | 'source'>('dynamic');
+  const [widthMode, setWidthMode] = useState<EditorWidthMode>(() => {
+    return (localStorage.getItem('slothmind_editor_width') as EditorWidthMode) || 'centered';
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isUpdatingFromExternal = useRef(false);
+
+  const effectiveViewMode: EditorViewMode = viewMode ?? (preview ? 'preview' : 'edit');
+
+  const toggleWidthMode = () => {
+    const next = widthMode === 'centered' ? 'full' : 'centered';
+    setWidthMode(next);
+    localStorage.setItem('slothmind_editor_width', next);
+  };
 
   const editor = useEditor({
     extensions: [
@@ -141,7 +164,7 @@ export function MarkdownEditor({
     editorProps: {
       attributes: {
         class:
-          'tiptap prose prose-sloth max-w-none focus:outline-none min-h-full px-10 py-6 font-sans text-sm leading-relaxed text-sloth-text selection:bg-sloth-accent/25',
+          'tiptap prose prose-sloth max-w-none focus:outline-none min-h-full font-sans text-sm leading-relaxed text-sloth-text selection:bg-sloth-accent/25',
         spellcheck: 'false',
       },
       handleKeyDown: (_view, event) => {
@@ -361,10 +384,11 @@ export function MarkdownEditor({
 
   const isInsideTable = editor?.isActive('table') ?? false;
 
-  if (preview) {
+  // Full Preview Mode
+  if ((effectiveViewMode as EditorViewMode) === 'preview') {
     return (
-      <div className="h-full overflow-y-auto px-10 py-8">
-        <article className="prose prose-sloth mx-auto max-w-3xl">
+      <div className="h-full overflow-y-auto px-8 py-8 flex justify-center">
+        <article className="prose prose-sloth w-full max-w-4xl">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {value || '*Nothing to preview yet.*'}
           </ReactMarkdown>
@@ -383,7 +407,7 @@ export function MarkdownEditor({
       />
 
       {/* Dynamic Markdown Format Bar */}
-      <div className="flex flex-wrap items-center justify-between border-b border-sloth-border/70 bg-sloth-panel/50 px-6 py-1.5 select-none text-xs">
+      <div className="flex flex-wrap items-center justify-between border-b border-sloth-border/70 bg-sloth-panel/50 px-6 py-1.5 select-none text-xs gap-2">
         <div className="flex items-center gap-0.5 flex-wrap">
           {/* Headings */}
           <button
@@ -646,8 +670,64 @@ export function MarkdownEditor({
           )}
         </div>
 
-        {/* Mode Switcher: Dynamic vs Raw Markdown Source */}
-        <div className="flex items-center gap-1.5">
+        {/* Right side controls: Document Width, View Mode, Mode Switcher */}
+        <div className="flex items-center gap-2">
+          {/* Centered vs Full-width Canvas Alignment Toggle */}
+          {effectiveViewMode === 'edit' && (
+            <button
+              onClick={toggleWidthMode}
+              className="flex items-center gap-1 rounded-lg border border-sloth-border bg-sloth-surface/70 px-2 py-0.5 text-[11px] text-sloth-subtle hover:text-sloth-text transition"
+              title={
+                widthMode === 'centered'
+                  ? 'Currently Centered (Click for Full Width)'
+                  : 'Currently Full Width (Click for Centered Layout)'
+              }
+            >
+              {widthMode === 'centered' ? <AlignCenter size={12} /> : <AlignJustify size={12} />}
+              <span className="capitalize">{widthMode}</span>
+            </button>
+          )}
+
+          {/* Quick View Mode Switcher in toolbar */}
+          {onViewModeChange && (
+            <div className="flex items-center rounded-lg border border-sloth-border bg-sloth-surface/70 p-0.5">
+              <button
+                onClick={() => onViewModeChange('edit')}
+                className={`p-1 rounded transition ${
+                  effectiveViewMode === 'edit'
+                    ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                    : 'text-sloth-subtle hover:text-sloth-text'
+                }`}
+                title="Full Editor View"
+              >
+                <PenLine size={12} />
+              </button>
+              <button
+                onClick={() => onViewModeChange('split')}
+                className={`p-1 rounded transition ${
+                  effectiveViewMode === 'split'
+                    ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                    : 'text-sloth-subtle hover:text-sloth-text'
+                }`}
+                title="Split View (Side-by-Side: Editor on Left, Live Preview on Right)"
+              >
+                <Columns2 size={12} />
+              </button>
+              <button
+                onClick={() => onViewModeChange('preview')}
+                className={`p-1 rounded transition ${
+                  effectiveViewMode === 'preview'
+                    ? 'bg-sloth-panel text-sloth-accent shadow-sm'
+                    : 'text-sloth-subtle hover:text-sloth-text'
+                }`}
+                title="Full Preview"
+              >
+                <Eye size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Notion AI summon pill */}
           <button
             onClick={() => onOpenNotionAI?.(selectedText)}
             className="flex items-center gap-1 rounded-lg bg-purple-500/10 border border-purple-500/25 px-2 py-0.5 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition"
@@ -657,7 +737,8 @@ export function MarkdownEditor({
             <span>AI</span>
           </button>
 
-          <div className="flex items-center rounded-lg border border-sloth-border bg-sloth-surface p-0.5">
+          {/* Dynamic vs Raw Markdown Source toggle */}
+          <div className="flex items-center rounded-lg border border-sloth-border bg-sloth-surface/70 p-0.5">
             <button
               onClick={() => setEditorMode('dynamic')}
               className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
@@ -687,26 +768,81 @@ export function MarkdownEditor({
       </div>
 
       {/* Editor Body */}
-      <div className="flex-1 overflow-y-auto">
-        {editorMode === 'dynamic' ? (
-          <div className="h-full w-full cursor-text" onClick={() => editor?.commands.focus()}>
-            <EditorContent editor={editor} className="h-full" />
+      {effectiveViewMode === 'split' ? (
+        /* Split View: Side-by-side (Left: Editor, Right: Live Rendered Preview) */
+        <div className="flex-1 flex overflow-hidden divide-x divide-sloth-border">
+          {/* Left half: Editor */}
+          <div className="flex-1 h-full overflow-y-auto">
+            {editorMode === 'dynamic' ? (
+              <div
+                className="min-h-full w-full cursor-text px-8 py-6"
+                onClick={() => editor?.commands.focus()}
+              >
+                <EditorContent editor={editor} className="min-h-full" />
+              </div>
+            ) : (
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                onSelect={handleTextareaSelect}
+                onKeyUp={handleTextareaSelect}
+                onMouseUp={handleTextareaSelect}
+                onKeyDown={handleTextareaKeyDown}
+                spellCheck={false}
+                className="h-full w-full min-h-[500px] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
+              />
+            )}
           </div>
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onSelect={handleTextareaSelect}
-            onKeyUp={handleTextareaSelect}
-            onMouseUp={handleTextareaSelect}
-            onKeyDown={handleTextareaKeyDown}
-            spellCheck={false}
-            className="h-full w-full resize-none bg-transparent px-10 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-            placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
-          />
-        )}
-      </div>
+
+          {/* Right half: Live Rendered Markdown Preview */}
+          <div className="flex-1 h-full overflow-y-auto bg-sloth-surface/15 px-8 py-6 select-text">
+            <div className="text-[10px] font-bold text-sloth-subtle uppercase tracking-wider mb-4 border-b border-sloth-border/50 pb-1.5 flex items-center justify-between">
+              <span>Live Rendered Preview</span>
+              <span className="text-[9px] font-normal lowercase opacity-70">markdown sync</span>
+            </div>
+            <article className="prose prose-sloth max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {value || '*Live preview appears here as you write...*'}
+              </ReactMarkdown>
+            </article>
+          </div>
+        </div>
+      ) : (
+        /* Full Single Editor: Centered or Full-width layout */
+        <div className="flex-1 overflow-y-auto">
+          <div
+            className={`min-h-full w-full cursor-text ${
+              widthMode === 'centered' ? 'flex justify-center' : ''
+            }`}
+            onClick={() => editor?.commands.focus()}
+          >
+            <div
+              className={`w-full ${
+                widthMode === 'centered' ? 'max-w-4xl px-8 py-6' : 'px-10 py-6'
+              }`}
+            >
+              {editorMode === 'dynamic' ? (
+                <EditorContent editor={editor} className="min-h-full" />
+              ) : (
+                <textarea
+                  ref={textareaRef}
+                  value={value}
+                  onChange={(event) => onChange(event.target.value)}
+                  onSelect={handleTextareaSelect}
+                  onKeyUp={handleTextareaSelect}
+                  onMouseUp={handleTextareaSelect}
+                  onKeyDown={handleTextareaKeyDown}
+                  spellCheck={false}
+                  className="h-full w-full min-h-[500px] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                  placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
