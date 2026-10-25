@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MarkdownEditor } from '../src/components/editor/MarkdownEditor';
+import { SlashCommandMenu } from '../src/components/editor/SlashCommandMenu';
 
 describe('MarkdownEditor Component', () => {
   it('renders in Dynamic mode by default with full quick format bar including tables and dividers', async () => {
@@ -112,5 +113,57 @@ describe('MarkdownEditor Component', () => {
     // Should render an article with the heading
     expect(screen.getByText('Preview Title')).toBeDefined();
     expect(screen.queryByTitle(/Heading 1/i)).toBeNull();
+  });
+
+  it('renders slash command suggestions menu with all commands', async () => {
+    const handleSelect = vi.fn();
+    await act(async () => {
+      render(
+        <SlashCommandMenu
+          query=""
+          selectedIndex={0}
+          onSelect={handleSelect}
+          position={{ top: 100, left: 100 }}
+          onClose={vi.fn()}
+        />
+      );
+    });
+
+    // All core block commands should be available
+    expect(screen.getByText('Ask Notion AI')).toBeDefined();
+    expect(screen.getByText('Heading 1')).toBeDefined();
+    expect(screen.getByText('Heading 2')).toBeDefined();
+    expect(screen.getByText('Heading 3')).toBeDefined();
+    expect(screen.getByText('Table')).toBeDefined();
+    expect(screen.getByText('To-do List')).toBeDefined();
+    expect(screen.getByText('Bulleted List')).toBeDefined();
+    expect(screen.getByText('Numbered List')).toBeDefined();
+    expect(screen.getByText('Quote')).toBeDefined();
+    expect(screen.getByText('Code Block')).toBeDefined();
+    expect(screen.getByText('Divider')).toBeDefined();
+
+    // Selecting an item calls onSelect
+    const h1Item = screen.getByText('Heading 1');
+    await act(async () => {
+      fireEvent.click(h1Item);
+    });
+    expect(handleSelect).toHaveBeenCalledWith('h1');
+  });
+
+  it('filters slash commands based on query', async () => {
+    await act(async () => {
+      render(
+        <SlashCommandMenu
+          query="tab"
+          selectedIndex={0}
+          onSelect={vi.fn()}
+          position={{ top: 100, left: 100 }}
+          onClose={vi.fn()}
+        />
+      );
+    });
+
+    expect(screen.getByText('Table')).toBeDefined();
+    expect(screen.queryByText('Heading 1')).toBeNull();
   });
 });

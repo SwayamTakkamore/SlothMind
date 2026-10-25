@@ -41,6 +41,7 @@ import {
   Underline as UnderlineIcon,
 } from 'lucide-react';
 import { NotionAIFloatingToolbar } from '../notion/NotionAIFloatingToolbar';
+import { SLASH_COMMANDS, SlashCommandMenu } from './SlashCommandMenu';
 
 export type EditorViewMode = 'edit' | 'split' | 'preview';
 export type EditorWidthMode = 'centered' | 'full';
@@ -116,6 +117,21 @@ export function MarkdownEditor({
   const [widthMode, setWidthMode] = useState<EditorWidthMode>(() => {
     return (localStorage.getItem('slothmind_editor_width') as EditorWidthMode) || 'centered';
   });
+
+  // Slash command popup state
+  const [slashMenu, setSlashMenu] = useState<{
+    open: boolean;
+    query: string;
+    position: { top: number; left: number };
+    selectedIndex: number;
+    range?: { from: number; to: number };
+  }>({
+    open: false,
+    query: '',
+    position: { top: 0, left: 0 },
+    selectedIndex: 0,
+  });
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isUpdatingFromExternal = useRef(false);
 
@@ -126,6 +142,166 @@ export function MarkdownEditor({
     setWidthMode(next);
     localStorage.setItem('slothmind_editor_width', next);
   };
+
+  // Filter commands by active query
+  const cleanQuery = slashMenu.query.toLowerCase().trim();
+  const filteredCommands = SLASH_COMMANDS.filter((cmd) => {
+    if (!cleanQuery) return true;
+    return (
+      cmd.title.toLowerCase().includes(cleanQuery) ||
+      cmd.id.toLowerCase().includes(cleanQuery) ||
+      cmd.keywords.some((k) => k.toLowerCase().includes(cleanQuery))
+    );
+  });
+
+  // Execute command in TipTap Dynamic mode
+  const executeSlashCommand = useCallback(
+    (cmdId: string) => {
+      setSlashMenu((prev) => ({ ...prev, open: false }));
+
+      if (slashMenu.range && editor) {
+        editor.commands.deleteRange(slashMenu.range);
+      }
+
+      switch (cmdId) {
+        case 'ai':
+          onOpenNotionAI?.('');
+          break;
+        case 'h1':
+          editor?.commands.setHeading({ level: 1 });
+          break;
+        case 'h2':
+          editor?.commands.setHeading({ level: 2 });
+          break;
+        case 'h3':
+          editor?.commands.setHeading({ level: 3 });
+          break;
+        case 'table':
+          editor?.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true });
+          break;
+        case 'todo':
+          editor?.commands.toggleTaskList();
+          break;
+        case 'bullet':
+          editor?.commands.toggleBulletList();
+          break;
+        case 'number':
+          editor?.commands.toggleOrderedList();
+          break;
+        case 'quote':
+          editor?.commands.toggleBlockquote();
+          break;
+        case 'code':
+          editor?.commands.toggleCodeBlock();
+          break;
+        case 'divider':
+          editor?.commands.setHorizontalRule();
+          break;
+      }
+      editor?.commands.focus();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slashMenu.range, onOpenNotionAI]
+  );
+
+  // Execute command in Raw Source mode (textarea)
+  const executeSlashCommandTextarea = useCallback(
+    (cmdId: string) => {
+      setSlashMenu((prev) => ({ ...prev, open: false }));
+      if (!textareaRef.current) return;
+
+      const target = textareaRef.current;
+      const cursorPos = target.selectionStart;
+      const textBefore = target.value.slice(0, cursorPos);
+      const match = textBefore.match(/(?:\s|^)\/([a-zA-Z0-9_-]*)$/);
+      const queryLen = match ? match[1].length + 1 : 1;
+      const replaceStart = cursorPos - queryLen;
+      const replaceEnd = cursorPos;
+
+      let inserted = '';
+      switch (cmdId) {
+        case 'ai':
+          onOpenNotionAI?.('');
+          break;
+        case 'h1':
+          inserted = '# ';
+          break;
+        case 'h2':
+          inserted = '## ';
+          break;
+        case 'h3':
+          inserted = '### ';
+          break;
+        case 'table':
+          inserted = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n';
+          break;
+        case 'todo':
+          inserted = '- [ ] ';
+          break;
+        case 'bullet':
+          inserted = '- ';
+          break;
+        case 'number':
+          inserted = '1. ';
+          break;
+        case 'quote':
+          inserted = '> ';
+          break;
+        case 'code':
+          inserted = '```\n\n```';
+          break;
+        case 'divider':
+          inserted = '\n---\n';
+          break;
+      }
+
+      const newContent =
+        target.value.slice(0, replaceStart) +
+        inserted +
+        target.value.slice(replaceEnd);
+      onChange(newContent);
+      setTimeout(() => {
+        target.focus();
+        const nextPos = replaceStart + inserted.length;
+        target.setSelectionRange(nextPos, nextPos);
+      }, 10);
+    },
+    [onOpenNotionAI, onChange]
+  );
+
+  // Check cursor position for slash command in TipTap
+  const checkSlashCommand = useCallback((currentEditor: ReturnType<typeof useEditor>) => {
+    if (!currentEditor) return;
+    const { state, view } = currentEditor;
+    const { $from } = state.selection;
+    const currentLineText = $from.parent.textContent;
+    const offset = $from.parentOffset;
+    const textBefore = currentLineText.slice(0, offset);
+
+    const match = textBefore.match(/(?:\s|^)\/([a-zA-Z0-9_-]*)$/);
+    if (match) {
+      const query = match[1];
+      const from = $from.pos - query.length - 1;
+      const to = $from.pos;
+      try {
+        const coords = view.coordsAtPos(to);
+        setSlashMenu({
+          open: true,
+          query,
+          position: {
+            top: coords.bottom + 6,
+            left: Math.min(Math.max(coords.left, 24), window.innerWidth - 340),
+          },
+          selectedIndex: 0,
+          range: { from, to },
+        });
+      } catch {
+        // coordsAtPos may fail during initial mount
+      }
+    } else {
+      setSlashMenu((prev) => (prev.open ? { ...prev, open: false } : prev));
+    }
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -151,7 +327,7 @@ export function MarkdownEditor({
       }),
       DynamicMarkdownRules,
       Placeholder.configure({
-        placeholder: "Type '#' for Heading, '| ' for Table, '---' for Divider, '[ ]' for Task, or Ctrl+J / /ai for Notion AI...",
+        placeholder: "Type '/' for commands, '#' for Heading, '| ' for Table, '---' for Divider, or Ctrl+J for Notion AI...",
         emptyEditorClass: 'is-editor-empty',
       }),
       Markdown.configure({
@@ -168,6 +344,40 @@ export function MarkdownEditor({
         spellcheck: 'false',
       },
       handleKeyDown: (_view, event) => {
+        // Handle slash command menu keyboard navigation
+        if (slashMenu.open && filteredCommands.length > 0) {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setSlashMenu((prev) => ({
+              ...prev,
+              selectedIndex: (prev.selectedIndex + 1) % filteredCommands.length,
+            }));
+            return true;
+          }
+          if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setSlashMenu((prev) => ({
+              ...prev,
+              selectedIndex:
+                (prev.selectedIndex - 1 + filteredCommands.length) % filteredCommands.length,
+            }));
+            return true;
+          }
+          if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            const cmd = filteredCommands[slashMenu.selectedIndex % filteredCommands.length];
+            if (cmd) {
+              executeSlashCommand(cmd.id);
+            }
+            return true;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setSlashMenu((prev) => ({ ...prev, open: false }));
+            return true;
+          }
+        }
+
         // Ctrl+J or Cmd+J opens Notion AI with selection
         if ((event.ctrlKey || event.metaKey) && (event.key === 'j' || event.key === 'J')) {
           event.preventDefault();
@@ -195,40 +405,15 @@ export function MarkdownEditor({
           const { $from } = state.selection;
           const currentLineText = $from.parent.textContent.trim();
 
-          // /ai shortcut
-          if (currentLineText === '/ai') {
-            event.preventDefault();
-            editor.commands.deleteRange({
-              from: $from.start(),
-              to: $from.end(),
-            });
-            onOpenNotionAI?.('');
-            return true;
-          }
-
-          // Horizontal Rule / Divider shortcuts: '---', '***', '___', '/hr', '/divider'
+          // Horizontal Rule / Divider shortcuts: '---', '***', '___'
           if (
             currentLineText === '---' ||
             currentLineText === '***' ||
-            currentLineText === '___' ||
-            currentLineText === '/hr' ||
-            currentLineText === '/divider'
+            currentLineText === '___'
           ) {
             event.preventDefault();
             editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
             editor.commands.setHorizontalRule();
-            return true;
-          }
-
-          // Table shortcut: '|', '/table', '/tbl'
-          if (
-            currentLineText === '|' ||
-            currentLineText === '/table' ||
-            currentLineText === '/tbl'
-          ) {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true });
             return true;
           }
 
@@ -250,54 +435,11 @@ export function MarkdownEditor({
             }
           }
 
-          // Task list / Checkbox shortcuts: '[]', '[ ]', '/todo', '/task'
-          if (
-            currentLineText === '[]' ||
-            currentLineText === '[ ]' ||
-            currentLineText === '/todo' ||
-            currentLineText === '/task'
-          ) {
+          // Task list / Checkbox shortcuts: '[]', '[ ]'
+          if (currentLineText === '[]' || currentLineText === '[ ]') {
             event.preventDefault();
             editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
             editor.commands.toggleTaskList();
-            return true;
-          }
-
-          // Heading shortcuts: /h1, /1, /h2, /2, /h3, /3
-          if (currentLineText === '/h1' || currentLineText === '/1') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.setHeading({ level: 1 });
-            return true;
-          }
-
-          if (currentLineText === '/h2' || currentLineText === '/2') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.setHeading({ level: 2 });
-            return true;
-          }
-
-          if (currentLineText === '/h3' || currentLineText === '/3') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.setHeading({ level: 3 });
-            return true;
-          }
-
-          // Blockquote shortcut: /quote
-          if (currentLineText === '/quote') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.toggleBlockquote();
-            return true;
-          }
-
-          // Code block shortcut: /code
-          if (currentLineText === '/code') {
-            event.preventDefault();
-            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
-            editor.commands.toggleCodeBlock();
             return true;
           }
         }
@@ -309,6 +451,7 @@ export function MarkdownEditor({
       if (isUpdatingFromExternal.current) return;
       const markdown = getEditorMarkdown(currentEditor);
       onChange(markdown);
+      checkSlashCommand(currentEditor);
     },
     onSelectionUpdate: ({ editor: currentEditor }) => {
       const { from, to } = currentEditor.state.selection;
@@ -318,6 +461,7 @@ export function MarkdownEditor({
       } else {
         setSelectedText('');
       }
+      checkSlashCommand(currentEditor);
     },
   });
 
@@ -355,37 +499,72 @@ export function MarkdownEditor({
     } else {
       setSelectedText('');
     }
+
+    // Check slash command in textarea
+    const textBefore = textareaRef.current.value.slice(0, start);
+    const match = textBefore.match(/(?:\s|^)\/([a-zA-Z0-9_-]*)$/);
+    if (match) {
+      const rect = textareaRef.current.getBoundingClientRect();
+      setSlashMenu({
+        open: true,
+        query: match[1],
+        position: {
+          top: Math.min(rect.top + 100, window.innerHeight - 350),
+          left: Math.min(rect.left + 50, window.innerWidth - 340),
+        },
+        selectedIndex: 0,
+      });
+    } else {
+      setSlashMenu((prev) => (prev.open ? { ...prev, open: false } : prev));
+    }
   }, []);
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Slash command keyboard handling in textarea
+    if (slashMenu.open && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashMenu((prev) => ({
+          ...prev,
+          selectedIndex: (prev.selectedIndex + 1) % filteredCommands.length,
+        }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashMenu((prev) => ({
+          ...prev,
+          selectedIndex:
+            (prev.selectedIndex - 1 + filteredCommands.length) % filteredCommands.length,
+        }));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const cmd = filteredCommands[slashMenu.selectedIndex % filteredCommands.length];
+        if (cmd) {
+          executeSlashCommandTextarea(cmd.id);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenu((prev) => ({ ...prev, open: false }));
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J')) {
       e.preventDefault();
       onOpenNotionAI?.(selectedText);
       return;
-    }
-
-    if (e.key === 'Enter') {
-      const target = e.currentTarget;
-      const cursorPos = target.selectionStart;
-      const textBeforeCursor = target.value.slice(0, cursorPos);
-      const lines = textBeforeCursor.split('\n');
-      const currentLine = lines[lines.length - 1];
-
-      if (currentLine.trim() === '/ai') {
-        e.preventDefault();
-        const newText =
-          target.value.slice(0, cursorPos - currentLine.length) +
-          target.value.slice(cursorPos);
-        onChange(newText);
-        onOpenNotionAI?.('');
-      }
     }
   };
 
   const isInsideTable = editor?.isActive('table') ?? false;
 
   // Full Preview Mode
-  if ((effectiveViewMode as EditorViewMode) === 'preview') {
+  if (effectiveViewMode === 'preview') {
     return (
       <div className="h-full overflow-y-auto px-8 py-8 flex justify-center">
         <article className="prose prose-sloth w-full max-w-4xl">
@@ -406,6 +585,23 @@ export function MarkdownEditor({
         onQuickAction={(action) => onQuickNotionAction?.(action, selectedText)}
       />
 
+      {/* Floating Slash Command Suggestions Menu */}
+      {slashMenu.open && (
+        <SlashCommandMenu
+          query={slashMenu.query}
+          selectedIndex={slashMenu.selectedIndex}
+          position={slashMenu.position}
+          onSelect={(cmdId) => {
+            if (editorMode === 'dynamic') {
+              executeSlashCommand(cmdId);
+            } else {
+              executeSlashCommandTextarea(cmdId);
+            }
+          }}
+          onClose={() => setSlashMenu((prev) => ({ ...prev, open: false }))}
+        />
+      )}
+
       {/* Dynamic Markdown Format Bar */}
       <div className="flex flex-wrap items-center justify-between border-b border-sloth-border/70 bg-sloth-panel/50 px-6 py-1.5 select-none text-xs gap-2">
         <div className="flex items-center gap-0.5 flex-wrap">
@@ -418,7 +614,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 1 (Type '# ' at start of line)"
+            title="Heading 1 (Type '# ' or '/h1')"
           >
             <Heading1 size={14} />
             <span className="text-[11px]">H1</span>
@@ -432,7 +628,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 2 (Type '## ' at start of line)"
+            title="Heading 2 (Type '## ' or '/h2')"
           >
             <Heading2 size={14} />
             <span className="text-[11px]">H2</span>
@@ -446,7 +642,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 3 (Type '### ' at start of line)"
+            title="Heading 3 (Type '### ' or '/h3')"
           >
             <Heading3 size={14} />
             <span className="text-[11px]">H3</span>
@@ -544,7 +740,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Bulleted List (Type '- ' or '* ')"
+            title="Bulleted List (Type '- ' or '/bullet')"
           >
             <List size={13} />
           </button>
@@ -557,7 +753,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Numbered List (Type '1. ')"
+            title="Numbered List (Type '1. ' or '/number')"
           >
             <ListOrdered size={13} />
           </button>
@@ -570,7 +766,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Task List / Checkbox (Type '[ ] ' or '- [ ] ')"
+            title="Task List / Checkbox (Type '[ ] ' or '/todo')"
           >
             <CheckSquare size={13} />
           </button>
@@ -583,7 +779,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Blockquote (Type '> ')"
+            title="Blockquote (Type '> ' or '/quote')"
           >
             <Quote size={13} />
           </button>
@@ -596,7 +792,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Code Block (Type '```')"
+            title="Code Block (Type '```' or '/code')"
           >
             <FileCode size={13} />
           </button>
@@ -606,7 +802,7 @@ export function MarkdownEditor({
             onClick={() => editor?.chain().focus().setHorizontalRule().run()}
             disabled={!editor}
             className="rounded-lg p-1.5 transition text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text"
-            title="Divider / Horizontal Rule (Type '---' on new line)"
+            title="Divider / Horizontal Rule (Type '---' or '/divider')"
           >
             <Minus size={13} />
           </button>
@@ -621,7 +817,7 @@ export function MarkdownEditor({
               }
               disabled={!editor}
               className="flex items-center gap-1 rounded-lg px-2 py-1 transition text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text"
-              title="Insert Table (Type '| ' or '| Col 1 | Col 2 |' on new line)"
+              title="Insert Table (Type '| ' or '/table')"
             >
               <TableIcon size={13} />
               <span className="text-[11px]">Table</span>
@@ -716,7 +912,7 @@ export function MarkdownEditor({
               <button
                 onClick={() => onViewModeChange('preview')}
                 className={`p-1 rounded transition ${
-                  effectiveViewMode === 'preview'
+                  (effectiveViewMode as EditorViewMode) === 'preview'
                     ? 'bg-sloth-panel text-sloth-accent shadow-sm'
                     : 'text-sloth-subtle hover:text-sloth-text'
                 }`}
@@ -731,7 +927,7 @@ export function MarkdownEditor({
           <button
             onClick={() => onOpenNotionAI?.(selectedText)}
             className="flex items-center gap-1 rounded-lg bg-purple-500/10 border border-purple-500/25 px-2 py-0.5 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition"
-            title="Ask Notion AI (Ctrl+J)"
+            title="Ask Notion AI (Ctrl+J or type '/ai')"
           >
             <Sparkles size={11} />
             <span>AI</span>
@@ -791,7 +987,7 @@ export function MarkdownEditor({
                 onKeyDown={handleTextareaKeyDown}
                 spellCheck={false}
                 className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-                placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
+                placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
               />
             )}
           </div>
@@ -816,12 +1012,17 @@ export function MarkdownEditor({
             className={`min-h-full w-full cursor-text ${
               widthMode === 'centered' ? 'flex justify-center' : ''
             }`}
-            onClick={() => editor?.commands.focus()}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                editor?.commands.focus();
+              }
+            }}
           >
             <div
               className={`w-full ${
                 widthMode === 'centered' ? 'max-w-4xl px-8 py-6' : 'px-10 py-6'
               }`}
+              onClick={() => editor?.commands.focus()}
             >
               {editorMode === 'dynamic' ? (
                 <EditorContent editor={editor} className="min-h-full" />
@@ -835,8 +1036,8 @@ export function MarkdownEditor({
                   onMouseUp={handleTextareaSelect}
                   onKeyDown={handleTextareaKeyDown}
                   spellCheck={false}
-                  className="h-full w-full min-h-[500px] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-                  placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
+                  className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                  placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
                 />
               )}
             </div>
