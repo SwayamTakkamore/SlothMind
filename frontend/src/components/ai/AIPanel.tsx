@@ -20,6 +20,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AIChatMessage } from './AIChatMessage';
 import { AIPromptInput } from './AIPromptInput';
+import { recognizeIntent } from '../notion/NotionAIModal';
 import { api } from '../../services/api';
 import type { NotionAITask, NotionAITemplate, NotionAITone } from '../../types';
 
@@ -117,7 +118,11 @@ export function AIPanel({
       const targetText = activeNoteContent.trim();
       const userMsg: Message = {
         role: 'user',
-        content: options?.prompt ? `Sloth AI [${label}]: ${options.prompt}` : `Sloth AI: ${label}`,
+        content: options?.prompt
+          ? label === 'Conversation'
+            ? options.prompt
+            : `Sloth AI [${label}]: ${options.prompt}`
+          : `Sloth AI: ${label}`,
       };
 
       setMessages((prev) => [...prev, userMsg]);
@@ -178,7 +183,14 @@ export function AIPanel({
       }
 
       if (mode === 'notion') {
-        await runNotionTask('draft', { prompt: content, label: 'Custom' });
+        const recognized = recognizeIntent(content, activeNoteContent);
+        await runNotionTask(recognized.task, {
+          prompt: recognized.prompt,
+          template_type: recognized.template_type,
+          tone: recognized.tone,
+          target_language: recognized.target_language,
+          label: recognized.badge.replace(/^[^\s]+\s*/, ''),
+        });
         return;
       }
 
@@ -272,7 +284,7 @@ export function AIPanel({
         abortControllerRef.current = null;
       }
     },
-    [messages, mode, currentActiveModel, runNotionTask]
+    [messages, mode, currentActiveModel, runNotionTask, activeNoteContent]
   );
 
   const handleCancel = useCallback(() => {

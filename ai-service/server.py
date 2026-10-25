@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import os
 import sys
 import threading
@@ -149,7 +150,7 @@ class RewriteRequest(BaseModel):
     instruction: str
 
 class NotionAIRequest(BaseModel):
-    task: str  # draft, edit, improve, fix-grammar, make-shorter, make-longer, simplify, change-tone, translate, explain, action-items, summarize, key-takeaways, continue
+    task: str  # draft, edit, improve, fix-grammar, make-shorter, make-longer, simplify, change-tone, translate, explain, action-items, summarize, key-takeaways, continue, chat
     text: Optional[str] = ""
     prompt: Optional[str] = ""
     template_type: Optional[str] = None
@@ -157,6 +158,7 @@ class NotionAIRequest(BaseModel):
     target_language: Optional[str] = None
     max_tokens: Optional[int] = 512
     stream: Optional[bool] = False
+    messages: Optional[List[ChatMessage]] = None
 
 class ActivateModelRequest(BaseModel):
     model_id: str
@@ -794,6 +796,42 @@ async def rewrite(request: RewriteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+def is_greeting_or_casual(text: str) -> bool:
+    if not text:
+        return True
+    t = text.strip().lower()
+    t_clean = re.sub(r"[^\w\s]", "", t).strip()
+    greetings = {
+        "hey", "hi", "hello", "howdy", "yo", "sup", "greetings", "salutations",
+        "good morning", "good afternoon", "good evening", "good day",
+        "hey there", "hi there", "hello there",
+        "how are you", "who are you", "what can you do", "what is your name",
+        "whats your name", "tell me about yourself", "hows it going", "how is it going",
+        "nice to meet you", "help", "test", "thanks", "thank you",
+    }
+    if t_clean in greetings:
+        return True
+    if re.match(r"^(hey|hi|hello|howdy|yo|sup|good\s+(morning|afternoon|evening|day))(\s+there|\s+sloth|\s+ai)?$", t_clean):
+        return True
+    if re.match(r"^(how\s+are\s+you|who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|hows\s+it\s+going)", t_clean):
+        return True
+    return False
+
+def has_explicit_action_command(text: str) -> bool:
+    if not text:
+        return False
+    t = text.strip().lower()
+    action_patterns = [
+        r"^(?:please\s+)?(?:write|draft|create|generate|compose|make|build|outline|brainstorm|summarize|list)\b",
+        r"\b(?:write|draft|create|generate|compose|make)\s+(?:a|an|the|me|some)?\s*(?:draft|article|blog|post|essay|story|prd|spec|plan|checklist|table|agenda|email|overview|guide|summary)\b",
+        r"\b(?:give\s+me|show\s+me)\s+(?:a|an|some)?\s*(?:ideas|draft|article|summary|outline|checklist)\b",
+        r"\b(?:tell\s+me\s+a\s+story|write\s+about|draft\s+about|explain)\b",
+    ]
+    for pattern in action_patterns:
+        if re.search(pattern, t):
+            return True
+    return False
+
 def build_notion_instruction(req: NotionAIRequest) -> str:
     task = req.task
     text = (req.text or "").strip()
@@ -801,6 +839,27 @@ def build_notion_instruction(req: NotionAIRequest) -> str:
     template = req.template_type or ""
     tone = req.tone or "professional"
     lang = req.target_language or "Spanish"
+
+    if task in ("chat", "conversation"):
+        context_part = f"\nRelevant document context:\n{text}\n" if text else ""
+        if is_greeting_or_casual(prompt):
+            return f"""You are Sloth AI, a helpful, intelligent workspace assistant.
+User says: "{prompt}"
+
+Respond naturally, warmly, and concisely. Greet the user and ask how you can assist them with their workspace, notes, or writing. Do NOT generate a draft, essay, or article."""
+        elif not has_explicit_action_command(prompt):
+            return f"""You are Sloth AI, a helpful, intelligent workspace assistant.
+{context_part}
+User input: "{prompt}"
+
+The user has entered a conversational question, remark, or topic without an explicit command to write or edit a document.
+Respond helpfully, clearly, and concisely. If they mentioned a topic without an explicit action, acknowledge it and reconfirm what they would like you to do (e.g. ask if they would like you to write a draft, generate an outline, brainstorm ideas, or answer questions). Do NOT write an unsolicited long draft or article."""
+        else:
+            return f"""You are Sloth AI, a helpful, intelligent workspace assistant.
+{context_part}
+User request: {prompt}
+
+Help the user with their request accurately, clearly, and concisely in Markdown."""
 
     if task == "draft":
         if template == "brainstorm":
@@ -820,7 +879,19 @@ def build_notion_instruction(req: NotionAIRequest) -> str:
         elif template == "essay-outline":
             return f"Create a detailed outline in Markdown for an article or essay on: {prompt}. Include Thesis, Major Sections, and Supporting Arguments."
         else:
-            return f"Write a high-quality, comprehensive draft in Markdown about: {prompt}."
+            if is_greeting_or_casual(prompt):
+                return f"""You are Sloth AI, a helpful, intelligent workspace assistant.
+User says: "{prompt}"
+
+Respond naturally, warmly, and concisely. Greet the user and ask how you can help them with their workspace, notes, or writing. Do NOT generate a draft, essay, or article."""
+            elif not has_explicit_action_command(prompt):
+                return f"""You are Sloth AI, a helpful, intelligent workspace assistant.
+User input: "{prompt}"
+
+The user has mentioned a topic without an explicit command to write or edit a document.
+Provide a concise, friendly response acknowledging "{prompt}" and reconfirm what they would like you to do. For example, ask if they would like you to draft an article, brainstorm ideas, create an outline, or answer questions about it. Do NOT write an unsolicited long draft."""
+            else:
+                return f"Write a high-quality, comprehensive draft in Markdown about: {prompt}."
 
     elif task in ("edit", "improve"):
         return f"""Improve the writing of the following text. Enhance clarity, flow, vocabulary, and impact while preserving the exact meaning:
@@ -900,7 +971,13 @@ async def notion_ai_endpoint(request: NotionAIRequest):
         )
     try:
         instruction = build_notion_instruction(request)
-        prompt = format_chat_prompt([ChatMessage(role="user", content=instruction)])
+        if request.task in ("chat", "conversation") and request.messages and len(request.messages) > 1:
+            chat_msgs = [ChatMessage(role="system", content=instruction)]
+            for m in request.messages[-10:]:
+                chat_msgs.append(ChatMessage(role=m.role, content=m.content))
+            prompt = format_chat_prompt(chat_msgs)
+        else:
+            prompt = format_chat_prompt([ChatMessage(role="user", content=instruction)])
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         max_tokens = min(request.max_tokens or 512, 1024)
         eos_ids = get_stop_token_ids(tokenizer)

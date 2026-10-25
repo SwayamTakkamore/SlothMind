@@ -400,7 +400,7 @@ export function aiRouter(session: VaultSession): Router {
 
   router.post('/notion-ai', asyncHandler(async (req, res) => {
     try {
-      const { task, text, prompt, template_type, tone, target_language, max_tokens, stream } = req.body;
+      const { task, text, prompt, template_type, tone, target_language, max_tokens, stream, messages } = req.body;
       if (!task || typeof task !== 'string') {
         return res.status(400).json({
           error: {
@@ -419,6 +419,7 @@ export function aiRouter(session: VaultSession): Router {
         target_language,
         max_tokens,
         stream: Boolean(stream),
+        messages,
       });
 
       if (stream) {

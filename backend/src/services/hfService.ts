@@ -23,6 +23,7 @@ export interface NotionAIRequest {
   target_language?: string;
   max_tokens?: number;
   stream?: boolean;
+  messages?: ChatMessage[];
 }
 
 export async function getHealth() {

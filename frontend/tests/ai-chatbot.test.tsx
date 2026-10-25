@@ -73,10 +73,29 @@ describe('Sloth AI Chatbot Intent Recognition', () => {
 
   it('recognizes selection context and falls back cleanly for general conversational questions', () => {
     const resGeneral = recognizeIntent('What is quantum computing?');
-    expect(resGeneral.task).toBe('draft');
+    expect(resGeneral.task).toBe('chat');
     expect(resGeneral.prompt).toBe('What is quantum computing?');
 
     const resEdit = recognizeIntent('Make it punchier', 'Selected paragraph text');
     expect(resEdit.task).toBe('edit');
+  });
+
+  it('recognizes casual greetings and returns chat intent without triggering drafting', () => {
+    expect(recognizeIntent('hey').task).toBe('chat');
+    expect(recognizeIntent('hi!').task).toBe('chat');
+    expect(recognizeIntent('hello there').task).toBe('chat');
+    expect(recognizeIntent('how are you doing today?').task).toBe('chat');
+    expect(recognizeIntent('who are you').task).toBe('chat');
+  });
+
+  it('keeps ambiguous single topic keywords in chat intent to reconfirm instead of drafting', () => {
+    expect(recognizeIntent('blockchain').task).toBe('chat');
+    expect(recognizeIntent('space exploration').task).toBe('chat');
+  });
+
+  it('recognizes explicit drafting commands for general topics', () => {
+    const resGuide = recognizeIntent('Write a guide on database indexing');
+    expect(resGuide.task).toBe('draft');
+    expect(resGuide.badge).toContain('Draft');
   });
 });

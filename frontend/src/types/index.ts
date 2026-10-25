@@ -125,7 +125,8 @@ export type NotionAITask =
   | 'action-items'
   | 'summarize'
   | 'key-takeaways'
-  | 'continue';
+  | 'continue'
+  | 'chat';
 
 export type NotionAITemplate =
   | 'brainstorm'
@@ -144,6 +145,11 @@ export type NotionAITone =
   | 'confident'
   | 'friendly';
 
+export interface NotionAIMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
 export interface NotionAIRequest {
   task: NotionAITask | string;
   text?: string;
@@ -153,6 +159,7 @@ export interface NotionAIRequest {
   target_language?: string;
   max_tokens?: number;
   stream?: boolean;
+  messages?: NotionAIMessage[];
 }
 
 export interface NotionAIResponse {

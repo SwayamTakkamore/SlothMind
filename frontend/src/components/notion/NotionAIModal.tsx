@@ -32,9 +32,53 @@ export interface RecognizedIntent {
 export function recognizeIntent(rawPrompt: string, selectedText?: string): RecognizedIntent {
   const p = rawPrompt.trim();
   const lower = p.toLowerCase();
+  const cleanLower = lower.replace(/[^\w\s]/g, '').trim();
   const hasSelection = Boolean(selectedText && selectedText.trim().length > 0);
 
-  // 1. Action items / Checklists / Tasks
+  // 1. Casual greetings & chit-chat -> Conversation (never automatically draft an article/document)
+  const greetings = [
+    'hey',
+    'hi',
+    'hello',
+    'howdy',
+    'yo',
+    'sup',
+    'greetings',
+    'salutations',
+    'good morning',
+    'good afternoon',
+    'good evening',
+    'good day',
+    'hey there',
+    'hi there',
+    'hello there',
+    'how are you',
+    'who are you',
+    'what can you do',
+    'what is your name',
+    'whats your name',
+    'tell me about yourself',
+    'hows it going',
+    'how is it going',
+    'nice to meet you',
+    'help',
+    'test',
+    'thanks',
+    'thank you',
+  ];
+  if (
+    greetings.includes(cleanLower) ||
+    /^(?:hey|hi|hello|howdy|yo|sup|good\s+(?:morning|afternoon|evening|day))(?:\s+there|\s+sloth|\s+ai)?$/i.test(cleanLower) ||
+    /^(?:how\s+are\s+you|who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|hows\s+it\s+going)/i.test(cleanLower)
+  ) {
+    return {
+      task: 'chat',
+      prompt: p,
+      badge: '💬 Conversation',
+    };
+  }
+
+  // 2. Action items / Checklists / Tasks
   if (/(?:action\s*items?|tasks?|to-?dos?|checklist|extract\s*tasks)/i.test(lower)) {
     return {
       task: 'action-items',
@@ -43,7 +87,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 2. Summarize / TLDR / Key takeaways
+  // 3. Summarize / TLDR / Key takeaways
   if (/(?:summariz|summary|tl;?dr|brief|recap|overview)/i.test(lower)) {
     return {
       task: 'summarize',
@@ -59,7 +103,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 3. Grammar / Proofreading / Spelling
+  // 4. Grammar / Proofreading / Spelling
   if (/(?:grammar|spell(?:ing)?|typos?|proofread|correct(?:ion)?)/i.test(lower)) {
     return {
       task: 'fix-grammar',
@@ -68,7 +112,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 4. Shorter / Condense / Conciseness
+  // 5. Shorter / Condense / Conciseness
   if (/(?:shorter|condense|concise|abbreviate|trim|cut\s*down)/i.test(lower)) {
     return {
       task: 'make-shorter',
@@ -77,7 +121,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 5. Longer / Expand / Elaborate
+  // 6. Longer / Expand / Elaborate
   if (/(?:longer|expand|elaborate|more\s*detail|flesh\s*out|extend)/i.test(lower)) {
     return {
       task: 'make-longer',
@@ -86,7 +130,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 6. Simplify / Plain English / Explain like I'm 5
+  // 7. Simplify / Plain English / Explain like I'm 5
   if (/(?:simplif|plain\s*english|eli5|explain\s*simply|easy\s*to\s*understand)/i.test(lower)) {
     return {
       task: 'simplify',
@@ -95,8 +139,8 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 7. Explain concept
-  if (/(?:explain|what\s+is|what\s+are|how\s+does|meaning\s+of)/i.test(lower) && hasSelection) {
+  // 8. Explain concept
+  if (/(?:explain|meaning\s+of)/i.test(lower) || (/(?:what\s+is|what\s+are|how\s+does)/i.test(lower) && hasSelection)) {
     return {
       task: 'explain',
       prompt: p,
@@ -104,7 +148,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 8. Translation
+  // 9. Translation
   const commonLangs = [
     'spanish',
     'french',
@@ -130,7 +174,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     }
   }
 
-  // 9. Tone modifications
+  // 10. Tone modifications
   const tones: NotionAITone[] = ['professional', 'casual', 'confident', 'friendly', 'direct'];
   for (const t of tones) {
     if (lower.includes(t) && (lower.includes('tone') || lower.includes('sound') || lower.includes('make it') || lower.includes('rewrite'))) {
@@ -143,7 +187,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     }
   }
 
-  // 10. Specific Drafting Templates
+  // 11. Specific Drafting Templates (Triggered by explicit drafting intent)
   if (/(?:brainstorm|ideas?|concept|angles?)/i.test(lower)) {
     return {
       task: 'draft',
@@ -152,15 +196,15 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
       badge: '⚡ Brainstorm',
     };
   }
-  if (/(?:blog(?:\s*post)?|article|essay)/i.test(lower)) {
+  if (/(?:blog(?:\s*post)?|article|essay)/i.test(lower) && /(?:write|draft|create|generate|compose|post|blog)/i.test(lower)) {
     return {
       task: 'draft',
       template_type: 'blog-post',
-      prompt: p.replace(/^(?:write a blog post about|write an article about|blog about)\s*/i, '') || p,
+      prompt: p.replace(/^(?:write a blog post about|write an article about|blog about|write about)\s*/i, '') || p,
       badge: '📰 Blog Post',
     };
   }
-  if (/(?:prd|spec|product\s*requirements?|feature\s*spec)/i.test(lower)) {
+  if (/(?:prd|spec|product\s*requirements?|feature\s*spec)/i.test(lower) && /(?:write|draft|create|generate|spec|prd)/i.test(lower)) {
     return {
       task: 'draft',
       template_type: 'prd',
@@ -168,7 +212,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
       badge: '📋 PRD Spec',
     };
   }
-  if (/(?:meeting|agenda|sync)/i.test(lower)) {
+  if (/(?:meeting|agenda|sync)/i.test(lower) && /(?:write|draft|create|generate|agenda)/i.test(lower)) {
     return {
       task: 'draft',
       template_type: 'meeting-agenda',
@@ -176,16 +220,16 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
       badge: '📅 Agenda',
     };
   }
-  if (/(?:email|outreach|cold\s*email|newsletter)/i.test(lower)) {
+  if (/(?:email|outreach|cold\s*email|newsletter)/i.test(lower) && /(?:write|draft|compose|send|email)/i.test(lower)) {
     return {
       task: 'draft',
       template_type: 'email',
-      prompt: p.replace(/^(?:draft an email to|write an email about)\s*/i, '') || p,
+      prompt: p.replace(/^(?:draft an email to|write an email about|compose an email)\s*/i, '') || p,
       badge: '✉️ Email',
     };
   }
 
-  // 11. Polish / Improve
+  // 12. Polish / Improve
   if (hasSelection && /(?:improve|rewrite|polish|rephrase|better)/i.test(lower)) {
     return {
       task: 'improve',
@@ -194,7 +238,7 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 12. General fallback: edit selection or draft
+  // 13. General selection fallback
   if (hasSelection) {
     return {
       task: 'edit',
@@ -203,10 +247,24 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
+  // 14. Explicit command to write/draft/create something
+  const hasExplicitCommand =
+    /^(?:please\s+)?(?:write|draft|create|generate|compose|make|build|outline)\b/i.test(lower) ||
+    /\b(?:write|draft|create|generate|compose)\s+(?:a|an|the|me|some)?\s*(?:draft|article|blog|post|essay|story|prd|spec|plan|checklist|table|agenda|email|guide|summary)\b/i.test(lower);
+
+  if (hasExplicitCommand) {
+    return {
+      task: 'draft',
+      prompt: p,
+      badge: '📝 Generate Draft',
+    };
+  }
+
+  // 15. Default: Normal conversation / reconfirmation
   return {
-    task: 'draft',
+    task: 'chat',
     prompt: p,
-    badge: '💬 Chat Response',
+    badge: '💬 Conversation',
   };
 }
 
@@ -301,6 +359,13 @@ export function NotionAIModal({
           tone: recognized.tone,
           target_language: recognized.target_language,
           max_tokens: 768,
+          messages: [
+            ...messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            { role: 'user', content: promptToSend },
+          ],
         });
 
         if (res.result) {
@@ -323,7 +388,7 @@ export function NotionAIModal({
         setIsGenerating(false);
       }
     },
-    [inputPrompt, activeModelName, useSelectionContext, hasSelection, selectedText, activeNoteContent]
+    [inputPrompt, activeModelName, useSelectionContext, hasSelection, selectedText, activeNoteContent, messages]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
