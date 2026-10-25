@@ -33,15 +33,19 @@ import {
   PenLine,
   Quote,
   Rows,
+  Search,
   Sparkles,
   Strikethrough,
   Table as TableIcon,
   Terminal,
   Trash2,
   Underline as UnderlineIcon,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { NotionAIFloatingToolbar } from '../notion/NotionAIFloatingToolbar';
 import { SLASH_COMMANDS, SlashCommandMenu } from './SlashCommandMenu';
+import { FindInPageBar } from './FindInPageBar';
 
 export type EditorViewMode = 'edit' | 'split' | 'preview';
 export type EditorWidthMode = 'centered' | 'full';
@@ -64,7 +68,113 @@ function getEditorMarkdown(editorInstance: EditorInstance): string {
   return storage.markdown?.getMarkdown?.() ?? '';
 }
 
-// Custom dynamic markdown input rules (e.g. typing '| ' creates table, '--- ' creates horizontal rule)
+// Emoji dictionary for fast inline replacement
+const EMOJI_MAP: Record<string, string> = {
+  ':rocket:': '🚀',
+  ':fire:': '🔥',
+  ':sloth:': '🦥',
+  ':check:': '✅',
+  ':star:': '⭐',
+  ':heart:': '❤️',
+  ':bulb:': '💡',
+  ':memo:': '📝',
+  ':tada:': '🎉',
+  ':eyes:': '👀',
+  ':warning:': '⚠️',
+  ':zap:': '⚡',
+  ':book:': '📖',
+  ':bug:': '🐛',
+  ':coffee:': '☕',
+  ':gear:': '⚙️',
+  ':lock:': '🔒',
+  ':pin:': '📌',
+  ':calendar:': '📅',
+  ':sparkles:': '✨',
+  ':100:': '💯',
+  ':smile:': '😊',
+  ':thumbsup:': '👍',
+  ':+1:': '👍',
+};
+
+// Auto-generate Table of Contents from markdown headings
+function generateTableOfContents(markdownText: string): string {
+  const lines = markdownText.split('\n');
+  const headings: Array<{ level: number; text: string; slug: string }> = [];
+
+  for (const line of lines) {
+    const match = line.match(/^(#{1,3})\s+(.+)$/);
+    if (match) {
+      const level = match[1].length;
+      const text = match[2].trim();
+      const slug = text
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-');
+      headings.push({ level, text, slug });
+    }
+  }
+
+  if (headings.length === 0) {
+    return '### 📑 Table of Contents\n- [Section 1](#section-1)\n- [Section 2](#section-2)\n';
+  }
+
+  let toc = '### 📑 Table of Contents\n';
+  for (const h of headings) {
+    const indent = '  '.repeat(Math.max(0, h.level - 1));
+    toc += `${indent}- [${h.text}](#${h.slug})\n`;
+  }
+  return toc + '\n';
+}
+
+const DAILY_STANDUP_TEMPLATE = `# 📅 Daily Standup - ${new Date().toISOString().slice(0, 10)}
+
+### 🎯 Goals for Today
+- [ ] Primary focus task
+- [ ] Review pending pull requests
+
+### ⏳ Yesterday's Achievements
+- Completed core editor components
+- Verified test suite
+
+### 🚧 Blockers & Notes
+- None currently
+`;
+
+const PRD_TEMPLATE = `# 📋 Product Requirement Document: [Feature Name]
+
+## 1. Problem Statement
+Explain what pain point users are facing.
+
+## 2. Proposed Solution
+Detail the architecture and user experience.
+
+## 3. Success Metrics
+- Metric 1: 50% improvement in task velocity
+- Metric 2: Zero regressions in test suite
+
+## 4. Milestone Schedule
+| Phase | Scope | ETA |
+| --- | --- | --- |
+| Phase 1 | Core MVP | Week 1 |
+| Phase 2 | Polish & Shortcuts | Week 2 |
+`;
+
+const MEETING_TEMPLATE = `# 🤝 Meeting Notes: [Meeting Topic]
+**Date:** ${new Date().toISOString().slice(0, 10)} | **Attendees:** @team
+
+### 📝 Agenda
+1. Project milestones review
+2. Technical blockers
+
+### 💬 Discussion Points
+- Architecture discussion and trade-offs
+
+### ✅ Action Items
+- [ ] @assignee follow up on benchmarks
+- [ ] Update documentation
+`;
+
+// Custom dynamic markdown input rules (fast block creation prefix + space, emojis, dates)
 const DynamicMarkdownRules = Extension.create({
   name: 'dynamicMarkdownRules',
   addInputRules() {
@@ -81,7 +191,7 @@ const DynamicMarkdownRules = Extension.create({
       }),
       // Typing '--- ' or '*** ' creates horizontal rule divider
       new InputRule({
-        find: /^(?:---|—-|___\s|\*\*\*\s)$/,
+        find: /^(?:---|\u2014-|___\s|\*\*\*\s)$/,
         handler: ({ chain, range }) => {
           chain()
             .deleteRange(range)
@@ -97,6 +207,62 @@ const DynamicMarkdownRules = Extension.create({
             .deleteRange(range)
             .toggleTaskList()
             .run();
+        },
+      }),
+      // Typing '" ' at start of line creates blockquote
+      new InputRule({
+        find: /^"\s$/,
+        handler: ({ chain, range }) => {
+          chain()
+            .deleteRange(range)
+            .toggleBlockquote()
+            .run();
+        },
+      }),
+      // Typing '@today ' inserts current date
+      new InputRule({
+        find: /@today\s$/,
+        handler: ({ chain, range }) => {
+          const dateStr = new Date().toISOString().slice(0, 10);
+          chain()
+            .deleteRange(range)
+            .insertContent(`${dateStr} `)
+            .run();
+        },
+      }),
+      // Typing '@now ' inserts current timestamp
+      new InputRule({
+        find: /@now\s$/,
+        handler: ({ chain, range }) => {
+          const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 16);
+          chain()
+            .deleteRange(range)
+            .insertContent(`${nowStr} `)
+            .run();
+        },
+      }),
+      // Typing '@remind ' inserts reminder tag
+      new InputRule({
+        find: /@remind\s$/,
+        handler: ({ chain, range }) => {
+          chain()
+            .deleteRange(range)
+            .insertContent('⏰ **Reminder:** ')
+            .run();
+        },
+      }),
+      // Typing emoji shortcode :name: followed by space
+      new InputRule({
+        find: /:([a-z0-9_+-]+):\s$/,
+        handler: ({ chain, range, match }) => {
+          const code = `:${match[1]}:`;
+          const emoji = EMOJI_MAP[code];
+          if (emoji) {
+            chain()
+              .deleteRange(range)
+              .insertContent(`${emoji} `)
+              .run();
+          }
         },
       }),
     ];
@@ -116,6 +282,11 @@ export function MarkdownEditor({
   const [editorMode, setEditorMode] = useState<'dynamic' | 'source'>('dynamic');
   const [widthMode, setWidthMode] = useState<EditorWidthMode>(() => {
     return (localStorage.getItem('slothmind_editor_width') as EditorWidthMode) || 'centered';
+  });
+  const [findBarOpen, setFindBarOpen] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(() => {
+    const saved = localStorage.getItem('slothmind_editor_zoom');
+    return saved ? Number(saved) : 100;
   });
 
   // Slash command popup state
@@ -143,6 +314,27 @@ export function MarkdownEditor({
     localStorage.setItem('slothmind_editor_width', next);
   };
 
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel((prev) => {
+      const next = Math.min(prev + 10, 160);
+      localStorage.setItem('slothmind_editor_zoom', String(next));
+      return next;
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel((prev) => {
+      const next = Math.max(prev - 10, 70);
+      localStorage.setItem('slothmind_editor_zoom', String(next));
+      return next;
+    });
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomLevel(100);
+    localStorage.setItem('slothmind_editor_zoom', '100');
+  }, []);
+
   // Filter commands by active query
   const cleanQuery = slashMenu.query.toLowerCase().trim();
   const filteredCommands = SLASH_COMMANDS.filter((cmd) => {
@@ -153,6 +345,30 @@ export function MarkdownEditor({
       cmd.keywords.some((k) => k.toLowerCase().includes(cleanQuery))
     );
   });
+
+  // Duplicate current block or line
+  const duplicateCurrentBlock = useCallback(() => {
+    if (editorMode === 'dynamic' && editor) {
+      const { state } = editor;
+      const { $from } = state.selection;
+      const lineText = $from.parent.textContent;
+      editor.commands.insertContentAt($from.end(), '\n' + (lineText || ''));
+    } else if (textareaRef.current) {
+      const target = textareaRef.current;
+      const val = target.value;
+      const selStart = target.selectionStart;
+      const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+      const lineEndIdx = val.indexOf('\n', selStart);
+      const lineEnd = lineEndIdx === -1 ? val.length : lineEndIdx;
+      const lineText = val.slice(lineStart, lineEnd);
+      const nextContent = val.slice(0, lineEnd) + '\n' + lineText + val.slice(lineEnd);
+      onChange(nextContent);
+      setTimeout(() => {
+        target.setSelectionRange(lineEnd + 1, lineEnd + 1 + lineText.length);
+      }, 10);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorMode, onChange]);
 
   // Execute command in TipTap Dynamic mode
   const executeSlashCommand = useCallback(
@@ -179,6 +395,16 @@ export function MarkdownEditor({
         case 'table':
           editor?.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true });
           break;
+        case 'board':
+          editor?.commands.insertContent(
+            '| 📋 To Do | ⏳ In Progress | ✅ Done |\n| --- | --- | --- |\n| Task 1 | Task 2 | Task 3 |\n'
+          );
+          break;
+        case 'calendar':
+          editor?.commands.insertContent(
+            '| Sun | Mon | Tue | Wed | Thu | Fri | Sat |\n| --- | --- | --- | --- | --- | --- | --- |\n| | 1 | 2 | 3 | 4 | 5 | 6 |\n'
+          );
+          break;
         case 'todo':
           editor?.commands.toggleTaskList();
           break;
@@ -188,20 +414,91 @@ export function MarkdownEditor({
         case 'number':
           editor?.commands.toggleOrderedList();
           break;
+        case 'toggle':
+          editor?.commands.insertContent(
+            '<details>\n<summary>▶ Toggle List</summary>\n\nCollapsible content goes here.\n</details>\n'
+          );
+          break;
         case 'quote':
           editor?.commands.toggleBlockquote();
+          break;
+        case 'callout':
+          editor?.commands.insertContent(
+            '> 💡 **Note:** Highlighted callout text with key information.\n\n'
+          );
           break;
         case 'code':
           editor?.commands.toggleCodeBlock();
           break;
+        case 'math':
+          editor?.commands.insertContent(
+            '$$\nf(x) = \\int_{-\\infty}^\\infty \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi\n$$\n\n'
+          );
+          break;
         case 'divider':
           editor?.commands.setHorizontalRule();
+          break;
+        case 'toc': {
+          const toc = generateTableOfContents(value);
+          editor?.commands.insertContent(toc);
+          break;
+        }
+        case 'today':
+          editor?.commands.insertContent(`${new Date().toISOString().slice(0, 10)} `);
+          break;
+        case 'remind':
+          editor?.commands.insertContent('⏰ **Reminder:** Tomorrow ');
+          break;
+        case 'wikilink':
+          editor?.commands.insertContent('[[Page Name]] ');
+          break;
+        case 'page':
+          editor?.commands.insertContent('[[New Subpage]] ');
+          break;
+        case 'duplicate':
+          duplicateCurrentBlock();
+          break;
+        case 'color':
+          editor?.commands.insertContent('<mark>Highlighted text</mark> ');
+          break;
+        case 'emoji':
+          editor?.commands.insertContent('🚀 ');
+          break;
+        case 'button':
+          editor?.commands.insertContent('[🚀 Action Button](https://slothmind.local) ');
+          break;
+        case 'embed':
+          editor?.commands.insertContent(
+            '<iframe src="https://example.com" width="100%" height="400"></iframe>\n\n'
+          );
+          break;
+        case 'file':
+          editor?.commands.insertContent('[📎 attachment.pdf](file://attachment.pdf) ');
+          break;
+        case 'image':
+          editor?.commands.insertContent(
+            '![Image description](https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800)\n\n'
+          );
+          break;
+        case 'video':
+          editor?.commands.insertContent(
+            '[![Watch Video](https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg)](https://www.youtube.com/watch?v=dQw4w9WgXcQ)\n\n'
+          );
+          break;
+        case 'template-daily':
+          editor?.commands.insertContent(DAILY_STANDUP_TEMPLATE);
+          break;
+        case 'template-prd':
+          editor?.commands.insertContent(PRD_TEMPLATE);
+          break;
+        case 'template-meeting':
+          editor?.commands.insertContent(MEETING_TEMPLATE);
           break;
       }
       editor?.commands.focus();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [slashMenu.range, onOpenNotionAI]
+    [slashMenu.range, onOpenNotionAI, value, duplicateCurrentBlock]
   );
 
   // Execute command in Raw Source mode (textarea)
@@ -235,6 +532,12 @@ export function MarkdownEditor({
         case 'table':
           inserted = '| Column 1 | Column 2 |\n| --- | --- |\n|  |  |\n';
           break;
+        case 'board':
+          inserted = '| 📋 To Do | ⏳ In Progress | ✅ Done |\n| --- | --- | --- |\n| Task 1 | Task 2 | Task 3 |\n';
+          break;
+        case 'calendar':
+          inserted = '| Sun | Mon | Tue | Wed | Thu | Fri | Sat |\n| --- | --- | --- | --- | --- | --- | --- |\n| | 1 | 2 | 3 | 4 | 5 | 6 |\n';
+          break;
         case 'todo':
           inserted = '- [ ] ';
           break;
@@ -244,14 +547,71 @@ export function MarkdownEditor({
         case 'number':
           inserted = '1. ';
           break;
+        case 'toggle':
+          inserted = '<details>\n<summary>▶ Toggle List</summary>\n\nCollapsible content goes here.\n</details>\n';
+          break;
         case 'quote':
           inserted = '> ';
+          break;
+        case 'callout':
+          inserted = '> 💡 **Note:** Highlighted callout text with key information.\n\n';
           break;
         case 'code':
           inserted = '```\n\n```';
           break;
+        case 'math':
+          inserted = '$$\nf(x) = \\int_{-\\infty}^\\infty \\hat{f}(\\xi)\\,e^{2 \\pi i \\xi x}\\,d\\xi\n$$\n\n';
+          break;
         case 'divider':
           inserted = '\n---\n';
+          break;
+        case 'toc':
+          inserted = generateTableOfContents(target.value);
+          break;
+        case 'today':
+          inserted = `${new Date().toISOString().slice(0, 10)} `;
+          break;
+        case 'remind':
+          inserted = '⏰ **Reminder:** Tomorrow ';
+          break;
+        case 'wikilink':
+          inserted = '[[Page Name]] ';
+          break;
+        case 'page':
+          inserted = '[[New Subpage]] ';
+          break;
+        case 'duplicate':
+          duplicateCurrentBlock();
+          return;
+        case 'color':
+          inserted = '<mark>Highlighted text</mark> ';
+          break;
+        case 'emoji':
+          inserted = '🚀 ';
+          break;
+        case 'button':
+          inserted = '[🚀 Action Button](https://slothmind.local) ';
+          break;
+        case 'embed':
+          inserted = '<iframe src="https://example.com" width="100%" height="400"></iframe>\n\n';
+          break;
+        case 'file':
+          inserted = '[📎 attachment.pdf](file://attachment.pdf) ';
+          break;
+        case 'image':
+          inserted = '![Image description](https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800)\n\n';
+          break;
+        case 'video':
+          inserted = '[![Watch Video](https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg)](https://www.youtube.com/watch?v=dQw4w9WgXcQ)\n\n';
+          break;
+        case 'template-daily':
+          inserted = DAILY_STANDUP_TEMPLATE;
+          break;
+        case 'template-prd':
+          inserted = PRD_TEMPLATE;
+          break;
+        case 'template-meeting':
+          inserted = MEETING_TEMPLATE;
           break;
       }
 
@@ -266,7 +626,7 @@ export function MarkdownEditor({
         target.setSelectionRange(nextPos, nextPos);
       }, 10);
     },
-    [onOpenNotionAI, onChange]
+    [onOpenNotionAI, onChange, duplicateCurrentBlock]
   );
 
   // Check cursor position for slash command in TipTap
@@ -331,7 +691,7 @@ export function MarkdownEditor({
         emptyEditorClass: 'is-editor-empty',
       }),
       Markdown.configure({
-        html: false,
+        html: true,
         transformPastedText: true,
         transformCopiedText: true,
       }),
@@ -376,6 +736,164 @@ export function MarkdownEditor({
             setSlashMenu((prev) => ({ ...prev, open: false }));
             return true;
           }
+        }
+
+        // Ctrl+F or Cmd+F: Search within page
+        if ((event.ctrlKey || event.metaKey) && (event.key === 'f' || event.key === 'F')) {
+          event.preventDefault();
+          setFindBarOpen(true);
+          return true;
+        }
+
+        // Ctrl+/ : Open block actions slash menu at cursor
+        if ((event.ctrlKey || event.metaKey) && event.key === '/' && editor) {
+          event.preventDefault();
+          try {
+            const coords = _view.coordsAtPos(editor.state.selection.from);
+            setSlashMenu({
+              open: true,
+              query: '',
+              position: {
+                top: coords.bottom + 6,
+                left: Math.min(Math.max(coords.left, 24), window.innerWidth - 340),
+              },
+              selectedIndex: 0,
+              range: { from: editor.state.selection.from, to: editor.state.selection.to },
+            });
+          } catch {
+            setSlashMenu({
+              open: true,
+              query: '',
+              position: { top: 120, left: 100 },
+              selectedIndex: 0,
+            });
+          }
+          return true;
+        }
+
+        // Ctrl+D: Duplicate current block / line
+        if ((event.ctrlKey || event.metaKey) && (event.key === 'd' || event.key === 'D') && editor) {
+          event.preventDefault();
+          duplicateCurrentBlock();
+          return true;
+        }
+
+        // Ctrl+Enter: Open/toggle current block (e.g. toggle task checkbox)
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && editor) {
+          event.preventDefault();
+          editor.commands.toggleTaskList();
+          return true;
+        }
+
+        // Ctrl + + / Ctrl + - / Ctrl + 0 : Zoom in / out / reset
+        if (event.ctrlKey || event.metaKey) {
+          if (event.key === '=' || event.key === '+') {
+            event.preventDefault();
+            handleZoomIn();
+            return true;
+          }
+          if (event.key === '-' || event.key === '_') {
+            event.preventDefault();
+            handleZoomOut();
+            return true;
+          }
+          if (event.key === '0') {
+            event.preventDefault();
+            handleZoomReset();
+            return true;
+          }
+        }
+
+        // Ctrl+Shift+1 through Ctrl+Shift+9 block conversions
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && editor) {
+          if (event.key === '!' || event.key === '1') {
+            event.preventDefault();
+            editor.chain().focus().setHeading({ level: 1 }).run();
+            return true;
+          }
+          if (event.key === '@' || event.key === '2') {
+            event.preventDefault();
+            editor.chain().focus().setHeading({ level: 2 }).run();
+            return true;
+          }
+          if (event.key === '#' || event.key === '3') {
+            event.preventDefault();
+            editor.chain().focus().setHeading({ level: 3 }).run();
+            return true;
+          }
+          if (event.key === '$' || event.key === '4') {
+            event.preventDefault();
+            editor.chain().focus().toggleTaskList().run();
+            return true;
+          }
+          if (event.key === '%' || event.key === '5') {
+            event.preventDefault();
+            editor.chain().focus().toggleBulletList().run();
+            return true;
+          }
+          if (event.key === '^' || event.key === '6') {
+            event.preventDefault();
+            editor.chain().focus().toggleOrderedList().run();
+            return true;
+          }
+          if (event.key === '&' || event.key === '7') {
+            event.preventDefault();
+            editor.chain().focus().insertContent('<details>\n<summary>▶ Toggle List</summary>\n\nContent\n</details>\n').run();
+            return true;
+          }
+          if (event.key === '*' || event.key === '8') {
+            event.preventDefault();
+            editor.chain().focus().toggleCodeBlock().run();
+            return true;
+          }
+          if (event.key === '(' || event.key === '9' || event.key === ')' || event.key === '0') {
+            event.preventDefault();
+            editor.chain().focus().setParagraph().run();
+            return true;
+          }
+          // Ctrl+Shift+S: Strikethrough
+          if (event.key === 'S' || event.key === 's') {
+            event.preventDefault();
+            editor.chain().focus().toggleStrike().run();
+            return true;
+          }
+          // Ctrl+Shift+M: Add comment
+          if (event.key === 'M' || event.key === 'm') {
+            event.preventDefault();
+            const sel = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' ');
+            editor.chain().focus().insertContent(`<!-- ${sel || 'Comment'} -->`).run();
+            return true;
+          }
+        }
+
+        // Ctrl+E: Inline code
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === 'e' || event.key === 'E') && editor) {
+          event.preventDefault();
+          editor.chain().focus().toggleCode().run();
+          return true;
+        }
+
+        // Tab and Shift+Tab: Indent / nest / outdent blocks
+        if (event.key === 'Tab' && editor) {
+          event.preventDefault();
+          if (event.shiftKey) {
+            if (editor.isActive('taskItem')) {
+              editor.commands.liftListItem('taskItem');
+            } else if (editor.isActive('listItem')) {
+              editor.commands.liftListItem('listItem');
+            } else if (editor.isActive('table')) {
+              editor.commands.goToPreviousCell();
+            }
+          } else {
+            if (editor.isActive('taskItem')) {
+              editor.commands.sinkListItem('taskItem');
+            } else if (editor.isActive('listItem')) {
+              editor.commands.sinkListItem('listItem');
+            } else if (editor.isActive('table')) {
+              editor.commands.goToNextCell();
+            }
+          }
+          return true;
         }
 
         // Ctrl+J or Cmd+J opens Notion AI with selection
@@ -489,6 +1007,23 @@ export function MarkdownEditor({
     }
   }, [editor]);
 
+  // Handle textarea change with emoji and shortcode replacement
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    let val = e.target.value;
+    for (const [shortcode, emoji] of Object.entries(EMOJI_MAP)) {
+      if (val.includes(`${shortcode} `)) {
+        val = val.split(`${shortcode} `).join(`${emoji} `);
+      }
+    }
+    if (val.includes('@today ')) {
+      val = val.split('@today ').join(`${new Date().toISOString().slice(0, 10)} `);
+    }
+    if (val.includes('@now ')) {
+      val = val.split('@now ').join(`${new Date().toISOString().replace('T', ' ').slice(0, 16)} `);
+    }
+    onChange(val);
+  };
+
   // Handle textarea selection in raw source mode
   const handleTextareaSelect = useCallback(() => {
     if (!textareaRef.current) return;
@@ -554,6 +1089,153 @@ export function MarkdownEditor({
       }
     }
 
+    // Ctrl+F: Search within page
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      setFindBarOpen(true);
+      return;
+    }
+
+    // Ctrl+/ : Open slash commands menu
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      setSlashMenu({
+        open: true,
+        query: '',
+        position: {
+          top: Math.min(rect.top + 80, window.innerHeight - 350),
+          left: Math.min(rect.left + 50, window.innerWidth - 340),
+        },
+        selectedIndex: 0,
+      });
+      return;
+    }
+
+    // Ctrl+D: Duplicate current line
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault();
+      duplicateCurrentBlock();
+      return;
+    }
+
+    // Ctrl+Enter: Toggle checkbox or list
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const val = target.value;
+      const selStart = target.selectionStart;
+      const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+      const lineEndIdx = val.indexOf('\n', selStart);
+      const lineEnd = lineEndIdx === -1 ? val.length : lineEndIdx;
+      const lineText = val.slice(lineStart, lineEnd);
+      let updatedLine = lineText;
+      if (lineText.includes('- [ ] ')) {
+        updatedLine = lineText.replace('- [ ] ', '- [x] ');
+      } else if (lineText.includes('- [x] ') || lineText.includes('- [X] ')) {
+        updatedLine = lineText.replace(/- \[[xX]\] /, '- [ ] ');
+      } else if (lineText.startsWith('- ')) {
+        updatedLine = lineText.replace(/^- /, '- [ ] ');
+      }
+      if (updatedLine !== lineText) {
+        const nextContent = val.slice(0, lineStart) + updatedLine + val.slice(lineEnd);
+        onChange(nextContent);
+      }
+      return;
+    }
+
+    // Tab and Shift+Tab indent/outdent
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      if (e.shiftKey) {
+        const lineStart = target.value.lastIndexOf('\n', start - 1) + 1;
+        if (target.value.slice(lineStart, lineStart + 2) === '  ') {
+          const next = target.value.slice(0, lineStart) + target.value.slice(lineStart + 2);
+          onChange(next);
+          setTimeout(() => {
+            target.setSelectionRange(Math.max(lineStart, start - 2), Math.max(lineStart, end - 2));
+          }, 10);
+        }
+      } else {
+        const next = target.value.slice(0, start) + '  ' + target.value.slice(end);
+        onChange(next);
+        setTimeout(() => {
+          target.setSelectionRange(start + 2, start + 2);
+        }, 10);
+      }
+      return;
+    }
+
+    // Ctrl+E: Inline code
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'e' || e.key === 'E')) {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const sel = target.value.slice(start, end);
+      const rep = `\`${sel || 'code'}\``;
+      const next = target.value.slice(0, start) + rep + target.value.slice(end);
+      onChange(next);
+      setTimeout(() => {
+        target.setSelectionRange(start + 1, start + 1 + (sel ? sel.length : 4));
+      }, 10);
+      return;
+    }
+
+    // Ctrl+Shift+S: Strikethrough
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'S' || e.key === 's')) {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const sel = target.value.slice(start, end);
+      const rep = `~~${sel || 'strikethrough'}~~`;
+      const next = target.value.slice(0, start) + rep + target.value.slice(end);
+      onChange(next);
+      setTimeout(() => {
+        target.setSelectionRange(start + 2, start + 2 + (sel ? sel.length : 13));
+      }, 10);
+      return;
+    }
+
+    // Ctrl+Shift+M: Add comment
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const sel = target.value.slice(start, end);
+      const rep = `<!-- ${sel || 'Comment'} -->`;
+      const next = target.value.slice(0, start) + rep + target.value.slice(end);
+      onChange(next);
+      return;
+    }
+
+    // Ctrl+Shift+1 through 9
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const lineStart = target.value.lastIndexOf('\n', start - 1) + 1;
+      let prefix = '';
+      if (e.key === '!' || e.key === '1') prefix = '# ';
+      else if (e.key === '@' || e.key === '2') prefix = '## ';
+      else if (e.key === '#' || e.key === '3') prefix = '### ';
+      else if (e.key === '$' || e.key === '4') prefix = '- [ ] ';
+      else if (e.key === '%' || e.key === '5') prefix = '- ';
+      else if (e.key === '^' || e.key === '6') prefix = '1. ';
+      else if (e.key === '*' || e.key === '8') prefix = '```\n';
+
+      if (prefix) {
+        e.preventDefault();
+        const next = target.value.slice(0, lineStart) + prefix + target.value.slice(lineStart);
+        onChange(next);
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J')) {
       e.preventDefault();
       onOpenNotionAI?.(selectedText);
@@ -585,6 +1267,19 @@ export function MarkdownEditor({
         onQuickAction={(action) => onQuickNotionAction?.(action, selectedText)}
       />
 
+      {/* Floating In-Page Search Bar (Ctrl+F) */}
+      <FindInPageBar
+        content={value}
+        isOpen={findBarOpen}
+        onClose={() => setFindBarOpen(false)}
+        onSelectMatch={(start, end) => {
+          if (editorMode === 'source' && textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(start, end);
+          }
+        }}
+      />
+
       {/* Floating Slash Command Suggestions Menu */}
       {slashMenu.open && (
         <SlashCommandMenu
@@ -614,7 +1309,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 1 (Type '# ' or '/h1')"
+            title="Heading 1 (Ctrl+Shift+1 or Type '# ' or '/h1')"
           >
             <Heading1 size={14} />
             <span className="text-[11px]">H1</span>
@@ -628,7 +1323,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 2 (Type '## ' or '/h2')"
+            title="Heading 2 (Ctrl+Shift+2 or Type '## ' or '/h2')"
           >
             <Heading2 size={14} />
             <span className="text-[11px]">H2</span>
@@ -642,7 +1337,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Heading 3 (Type '### ' or '/h3')"
+            title="Heading 3 (Ctrl+Shift+3 or Type '### ' or '/h3')"
           >
             <Heading3 size={14} />
             <span className="text-[11px]">H3</span>
@@ -659,7 +1354,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Bold (**text**)"
+            title="Bold (Ctrl+B)"
           >
             <Bold size={13} />
           </button>
@@ -672,7 +1367,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Italic (*text*)"
+            title="Italic (Ctrl+I)"
           >
             <Italic size={13} />
           </button>
@@ -698,7 +1393,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Strikethrough (~~text~~)"
+            title="Strikethrough (Ctrl+Shift+S)"
           >
             <Strikethrough size={13} />
           </button>
@@ -711,7 +1406,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Inline Code (`code`)"
+            title="Inline Code (Ctrl+E)"
           >
             <Code size={13} />
           </button>
@@ -740,7 +1435,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Bulleted List (Type '- ' or '/bullet')"
+            title="Bulleted List (Ctrl+Shift+5 or Type '- ' or '/bullet')"
           >
             <List size={13} />
           </button>
@@ -753,7 +1448,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Numbered List (Type '1. ' or '/number')"
+            title="Numbered List (Ctrl+Shift+6 or Type '1. ' or '/number')"
           >
             <ListOrdered size={13} />
           </button>
@@ -766,7 +1461,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Task List / Checkbox (Type '[ ] ' or '/todo')"
+            title="Task List / Checkbox (Ctrl+Shift+4 or Type '[ ] ' or '/todo')"
           >
             <CheckSquare size={13} />
           </button>
@@ -792,7 +1487,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Code Block (Type '```' or '/code')"
+            title="Code Block (Ctrl+Shift+8 or Type '```' or '/code')"
           >
             <FileCode size={13} />
           </button>
@@ -866,8 +1561,47 @@ export function MarkdownEditor({
           )}
         </div>
 
-        {/* Right side controls: Document Width, View Mode, Mode Switcher */}
+        {/* Right side controls: Find, Zoom, Document Width, View Mode, Mode Switcher */}
         <div className="flex items-center gap-2">
+          {/* Find In Page Button (Ctrl+F) */}
+          <button
+            onClick={() => setFindBarOpen((o) => !o)}
+            className={`flex items-center gap-1 rounded-lg border border-sloth-border bg-sloth-surface/70 px-2 py-0.5 text-[11px] transition ${
+              findBarOpen
+                ? 'text-sloth-accent border-sloth-accent/40 bg-sloth-accent/10'
+                : 'text-sloth-subtle hover:text-sloth-text'
+            }`}
+            title="Search within page (Ctrl+F)"
+          >
+            <Search size={12} />
+            <span>Find</span>
+          </button>
+
+          {/* Zoom controls */}
+          <div className="flex items-center rounded-lg border border-sloth-border bg-sloth-surface/70 p-0.5 text-[11px]">
+            <button
+              onClick={handleZoomOut}
+              className="p-1 rounded text-sloth-subtle hover:text-sloth-text transition"
+              title="Zoom out (Ctrl+-)"
+            >
+              <ZoomOut size={12} />
+            </button>
+            <button
+              onClick={handleZoomReset}
+              className="px-1 font-mono text-[10px] text-sloth-subtle hover:text-sloth-text"
+              title="Reset zoom (Ctrl+0)"
+            >
+              {zoomLevel}%
+            </button>
+            <button
+              onClick={handleZoomIn}
+              className="p-1 rounded text-sloth-subtle hover:text-sloth-text transition"
+              title="Zoom in (Ctrl++)"
+            >
+              <ZoomIn size={12} />
+            </button>
+          </div>
+
           {/* Centered vs Full-width Canvas Alignment Toggle */}
           {effectiveViewMode === 'edit' && (
             <button
@@ -963,87 +1697,92 @@ export function MarkdownEditor({
         </div>
       </div>
 
-      {/* Editor Body */}
-      {effectiveViewMode === 'split' ? (
-        /* Split View: Side-by-side (Left: Editor, Right: Live Rendered Preview) */
-        <div className="flex-1 min-h-0 flex overflow-hidden divide-x divide-sloth-border">
-          {/* Left half: Editor */}
-          <div className="flex-1 h-full overflow-y-auto">
-            {editorMode === 'dynamic' ? (
-              <div
-                className="min-h-full w-full cursor-text px-8 py-6"
-                onClick={() => editor?.commands.focus()}
-              >
-                <EditorContent editor={editor} className="min-h-full" />
-              </div>
-            ) : (
-              <textarea
-                ref={textareaRef}
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-                onSelect={handleTextareaSelect}
-                onKeyUp={handleTextareaSelect}
-                onMouseUp={handleTextareaSelect}
-                onKeyDown={handleTextareaKeyDown}
-                spellCheck={false}
-                className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-                placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
-              />
-            )}
-          </div>
-
-          {/* Right half: Live Rendered Markdown Preview */}
-          <div className="flex-1 h-full overflow-y-auto bg-sloth-surface/15 px-8 py-6 select-text">
-            <div className="text-[10px] font-bold text-sloth-subtle uppercase tracking-wider mb-4 border-b border-sloth-border/50 pb-1.5 flex items-center justify-between">
-              <span>Live Rendered Preview</span>
-              <span className="text-[9px] font-normal lowercase opacity-70">markdown sync</span>
-            </div>
-            <article className="prose prose-sloth max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {value || '*Live preview appears here as you write...*'}
-              </ReactMarkdown>
-            </article>
-          </div>
-        </div>
-      ) : (
-        /* Full Single Editor: Centered or Full-width layout */
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div
-            className={`min-h-full w-full cursor-text ${
-              widthMode === 'centered' ? 'flex justify-center' : ''
-            }`}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                editor?.commands.focus();
-              }
-            }}
-          >
-            <div
-              className={`w-full ${
-                widthMode === 'centered' ? 'max-w-4xl px-8 py-6' : 'px-10 py-6'
-              }`}
-              onClick={() => editor?.commands.focus()}
-            >
+      {/* Editor Body with Zoom Scale */}
+      <div
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        style={zoomLevel !== 100 ? { zoom: `${zoomLevel}%` } : undefined}
+      >
+        {effectiveViewMode === 'split' ? (
+          /* Split View: Side-by-side (Left: Editor, Right: Live Rendered Preview) */
+          <div className="flex-1 min-h-0 flex overflow-hidden divide-x divide-sloth-border">
+            {/* Left half: Editor */}
+            <div className="flex-1 h-full overflow-y-auto">
               {editorMode === 'dynamic' ? (
-                <EditorContent editor={editor} className="min-h-full" />
+                <div
+                  className="min-h-full w-full cursor-text px-8 py-6"
+                  onClick={() => editor?.commands.focus()}
+                >
+                  <EditorContent editor={editor} className="min-h-full" />
+                </div>
               ) : (
                 <textarea
                   ref={textareaRef}
                   value={value}
-                  onChange={(event) => onChange(event.target.value)}
+                  onChange={handleTextareaChange}
                   onSelect={handleTextareaSelect}
                   onKeyUp={handleTextareaSelect}
                   onMouseUp={handleTextareaSelect}
                   onKeyDown={handleTextareaKeyDown}
                   spellCheck={false}
-                  className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                  className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
                   placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
                 />
               )}
             </div>
+
+            {/* Right half: Live Rendered Markdown Preview */}
+            <div className="flex-1 h-full overflow-y-auto bg-sloth-surface/15 px-8 py-6 select-text">
+              <div className="text-[10px] font-bold text-sloth-subtle uppercase tracking-wider mb-4 border-b border-sloth-border/50 pb-1.5 flex items-center justify-between">
+                <span>Live Rendered Preview</span>
+                <span className="text-[9px] font-normal lowercase opacity-70">markdown sync</span>
+              </div>
+              <article className="prose prose-sloth max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {value || '*Live preview appears here as you write...*'}
+                </ReactMarkdown>
+              </article>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          /* Full Single Editor: Centered or Full-width layout */
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div
+              className={`min-h-full w-full cursor-text ${
+                widthMode === 'centered' ? 'flex justify-center' : ''
+              }`}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  editor?.commands.focus();
+                }
+              }}
+            >
+              <div
+                className={`w-full ${
+                  widthMode === 'centered' ? 'max-w-4xl px-8 py-6' : 'px-10 py-6'
+                }`}
+                onClick={() => editor?.commands.focus()}
+              >
+                {editorMode === 'dynamic' ? (
+                  <EditorContent editor={editor} className="min-h-full" />
+                ) : (
+                  <textarea
+                    ref={textareaRef}
+                    value={value}
+                    onChange={handleTextareaChange}
+                    onSelect={handleTextareaSelect}
+                    onKeyUp={handleTextareaSelect}
+                    onMouseUp={handleTextareaSelect}
+                    onKeyDown={handleTextareaKeyDown}
+                    spellCheck={false}
+                    className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                    placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

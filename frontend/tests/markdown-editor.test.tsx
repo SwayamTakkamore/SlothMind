@@ -28,10 +28,13 @@ describe('MarkdownEditor Component', () => {
     expect(screen.getByTitle(/Insert Table/i)).toBeDefined();
     expect(screen.getByTitle(/Blockquote/i)).toBeDefined();
 
-    // Mode toggles
+    // Mode toggles & Find/Zoom
     expect(screen.getByText('Dynamic')).toBeDefined();
     expect(screen.getByText('Raw')).toBeDefined();
     expect(screen.getByText(/Centered/i)).toBeDefined();
+    expect(screen.getByTitle(/Search within page/i)).toBeDefined();
+    expect(screen.getByTitle(/Zoom in/i)).toBeDefined();
+    expect(screen.getByTitle(/Zoom out/i)).toBeDefined();
   });
 
   it('can switch between Dynamic and Raw source mode', async () => {
@@ -82,6 +85,66 @@ describe('MarkdownEditor Component', () => {
     expect(screen.getByText(/Full/i)).toBeDefined();
   });
 
+  it('can toggle in-page find bar and search content', async () => {
+    await act(async () => {
+      render(
+        <MarkdownEditor
+          value="Quick brown sloth jumps over the lazy dog"
+          onChange={vi.fn()}
+          preview={false}
+        />
+      );
+    });
+
+    const findBtn = screen.getByTitle(/Search within page/i);
+    await act(async () => {
+      fireEvent.click(findBtn);
+    });
+
+    const searchInput = screen.getByPlaceholderText(/Find in page/i);
+    expect(searchInput).toBeDefined();
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: 'sloth' } });
+    });
+
+    expect(screen.getByText(/1 of 1/i)).toBeDefined();
+  });
+
+  it('can zoom in and out and reset zoom level', async () => {
+    await act(async () => {
+      render(
+        <MarkdownEditor
+          value="Sample zoomable text"
+          onChange={vi.fn()}
+          preview={false}
+        />
+      );
+    });
+
+    const zoomInBtn = screen.getByTitle(/Zoom in/i);
+    const zoomOutBtn = screen.getByTitle(/Zoom out/i);
+    const zoomResetBtn = screen.getByTitle(/Reset zoom/i);
+
+    expect(zoomResetBtn.textContent).toContain('100%');
+
+    await act(async () => {
+      fireEvent.click(zoomInBtn);
+    });
+    expect(zoomResetBtn.textContent).toContain('110%');
+
+    await act(async () => {
+      fireEvent.click(zoomOutBtn);
+      fireEvent.click(zoomOutBtn);
+    });
+    expect(zoomResetBtn.textContent).toContain('90%');
+
+    await act(async () => {
+      fireEvent.click(zoomResetBtn);
+    });
+    expect(zoomResetBtn.textContent).toContain('100%');
+  });
+
   it('renders split view with both editor and live rendered preview side-by-side', async () => {
     await act(async () => {
       render(
@@ -115,7 +178,43 @@ describe('MarkdownEditor Component', () => {
     expect(screen.queryByTitle(/Heading 1/i)).toBeNull();
   });
 
-  it('renders slash command suggestions menu with all commands', async () => {
+  it('supports raw mode Notion shortcuts: duplicate, toggle checkbox, and code formatting', async () => {
+    const handleChange = vi.fn();
+    await act(async () => {
+      render(
+        <MarkdownEditor
+          value="- [ ] Task item to toggle"
+          onChange={handleChange}
+          preview={false}
+        />
+      );
+    });
+
+    // Switch to Raw mode
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Raw Markdown Source/i));
+    });
+
+    const textarea = screen.getByPlaceholderText(/Start writing in Markdown/i) as HTMLTextAreaElement;
+    textarea.selectionStart = 5;
+    textarea.selectionEnd = 5;
+
+    // Test Ctrl+Enter to toggle task checkbox
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('- [x] Task item to toggle');
+
+    // Test Ctrl+D to duplicate line
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: 'd', ctrlKey: true });
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('- [ ] Task item to toggle\n- [ ] Task item to toggle');
+  });
+
+  it('renders slash command suggestions menu with all Notion commands', async () => {
     const handleSelect = vi.fn();
     await act(async () => {
       render(
@@ -129,18 +228,28 @@ describe('MarkdownEditor Component', () => {
       );
     });
 
-    // All core block commands should be available
+    // All core Notion commands should be available
     expect(screen.getByText('Ask Notion AI')).toBeDefined();
     expect(screen.getByText('Heading 1')).toBeDefined();
     expect(screen.getByText('Heading 2')).toBeDefined();
     expect(screen.getByText('Heading 3')).toBeDefined();
     expect(screen.getByText('Table')).toBeDefined();
+    expect(screen.getByText('Kanban Board')).toBeDefined();
+    expect(screen.getByText('Calendar Sprint View')).toBeDefined();
     expect(screen.getByText('To-do List')).toBeDefined();
     expect(screen.getByText('Bulleted List')).toBeDefined();
     expect(screen.getByText('Numbered List')).toBeDefined();
+    expect(screen.getByText('Toggle List')).toBeDefined();
+    expect(screen.getByText('Callout')).toBeDefined();
     expect(screen.getByText('Quote')).toBeDefined();
     expect(screen.getByText('Code Block')).toBeDefined();
-    expect(screen.getByText('Divider')).toBeDefined();
+    expect(screen.getByText('Math Equation')).toBeDefined();
+    expect(screen.getByText('Table of Contents')).toBeDefined();
+    expect(screen.getByText("Today's Date")).toBeDefined();
+    expect(screen.getByText('Reminder')).toBeDefined();
+    expect(screen.getByText('Daily Standup Template')).toBeDefined();
+    expect(screen.getByText('PRD Feature Spec Template')).toBeDefined();
+    expect(screen.getByText('Meeting Notes Template')).toBeDefined();
 
     // Selecting an item calls onSelect
     const h1Item = screen.getByText('Heading 1');
@@ -154,7 +263,7 @@ describe('MarkdownEditor Component', () => {
     await act(async () => {
       render(
         <SlashCommandMenu
-          query="tab"
+          query="kanban"
           selectedIndex={0}
           onSelect={vi.fn()}
           position={{ top: 100, left: 100 }}
@@ -163,7 +272,7 @@ describe('MarkdownEditor Component', () => {
       );
     });
 
-    expect(screen.getByText('Table')).toBeDefined();
+    expect(screen.getByText('Kanban Board')).toBeDefined();
     expect(screen.queryByText('Heading 1')).toBeNull();
   });
 });

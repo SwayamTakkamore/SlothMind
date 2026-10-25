@@ -50,6 +50,10 @@ export default function App() {
   const [viewMode, setViewMode] = useState<EditorViewMode>('edit');
   const [loadingNote, setLoadingNote] = useState(false);
 
+  // Note navigation history (Ctrl+[ and Ctrl+])
+  const [noteNavHistory, setNoteNavHistory] = useState<string[]>([]);
+  const [noteNavIndex, setNoteNavIndex] = useState(-1);
+
   const refreshTree = useCallback(() => setTreeKey((k) => k + 1), []);
 
   useEffect(() => {
@@ -77,6 +81,13 @@ export default function App() {
       setContent('');
       return;
     }
+    // Track in navigation history
+    setNoteNavHistory((prev) => {
+      if (prev[prev.length - 1] === activeNotePath) return prev;
+      return [...prev, activeNotePath];
+    });
+    setNoteNavIndex((prev) => prev + 1);
+
     let cancelled = false;
     setLoadingNote(true);
     api
@@ -149,13 +160,57 @@ export default function App() {
     [selectedTextForNotion]
   );
 
+  const handleGoBack = useCallback(() => {
+    if (noteNavIndex > 0) {
+      const prevIdx = noteNavIndex - 1;
+      setNoteNavIndex(prevIdx);
+      setActiveNotePath(noteNavHistory[prevIdx]);
+    }
+  }, [noteNavHistory, noteNavIndex]);
+
+  const handleGoForward = useCallback(() => {
+    if (noteNavIndex < noteNavHistory.length - 1) {
+      const nextIdx = noteNavIndex + 1;
+      setNoteNavIndex(nextIdx);
+      setActiveNotePath(noteNavHistory[nextIdx]);
+    }
+  }, [noteNavHistory, noteNavIndex]);
+
+  const handleGoUpHierarchy = useCallback(() => {
+    if (!activeNotePath) return;
+    const parts = activeNotePath.split('/');
+    if (parts.length > 1) {
+      parts.pop();
+    }
+  }, [activeNotePath]);
+
+  const handleCopyUrl = useCallback(() => {
+    if (!activeNotePath) return;
+    const url = `${window.location.origin}/#${encodeURIComponent(activeNotePath)}`;
+    navigator.clipboard?.writeText(url);
+  }, [activeNotePath]);
+
+  const handleEscape = useCallback(() => {
+    setSearchOpen(false);
+    setSettingsOpen(false);
+    setNotionModalOpen(false);
+    setModelLibraryOpen(false);
+  }, []);
+
   useKeyboard({
     onSearch: () => setSearchOpen(true),
     onSave: () => void autosave.saveNow(),
     onNewNote: () => void createNote(),
+    onNewWindow: () => window.open(window.location.href, '_blank'),
+    onNewTab: () => window.open(window.location.href, '_blank'),
+    onCopyUrl: handleCopyUrl,
+    onGoBack: handleGoBack,
+    onGoForward: handleGoForward,
+    onGoUpHierarchy: handleGoUpHierarchy,
     onSettings: () => setSettingsOpen((o) => !o),
     onToggleTheme: theme.toggleTheme,
     onNotionAI: () => handleOpenNotionAI(),
+    onEscape: handleEscape,
   });
 
   const editor = (
@@ -231,48 +286,42 @@ export default function App() {
   return (
     <VaultContext.Provider value={{ activeNotePath, setActiveNotePath, refreshTree }}>
       <MainLayout
-        sidebar={
-          <Sidebar
-            summary={vault.summary}
-            onOpenVault={() => setVaultPickerOpen(true)}
-            onCreateNote={() => void createNote()}
-            onCreateFolder={() => void createFolder()}
-            onRefresh={() => {
-              void vault.refresh();
-              refreshTree();
-            }}
-            onSearch={() => setSearchOpen(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onOpenModelLibrary={() => setModelLibraryOpen(true)}
-            activeModelName={activeModelName}
-            isDark={theme.isDark}
-            onToggleTheme={theme.toggleTheme}
-            treeKey={treeKey}
-          />
-        }
+        sidebar={<Sidebar
+          summary={vault.summary}
+          onOpenVault={() => setVaultPickerOpen(true)}
+          onCreateNote={() => void createNote()}
+          onCreateFolder={() => void createFolder()}
+          onRefresh={() => {
+            void vault.refresh();
+            refreshTree();
+          }}
+          onSearch={() => setSearchOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenModelLibrary={() => setModelLibraryOpen(true)}
+          activeModelName={activeModelName}
+          isDark={theme.isDark}
+          onToggleTheme={theme.toggleTheme}
+          treeKey={treeKey}
+        />}
         editor={editor}
-        statusBar={
-          <StatusBar
-            summary={vault.summary}
-            saveStatus={autosave.status}
-            activeNote={activeNotePath}
-            onOpenModelLibrary={() => setModelLibraryOpen(true)}
-            activeModelName={activeModelName}
-          />
-        }
-        aiPanel={
-          <AIPanel
-            isOpen={aiPanelOpen}
-            onToggle={() => setAiPanelOpen((o) => !o)}
-            activeNotePath={activeNotePath}
-            activeNoteContent={content}
-            onSaveAsNote={saveAsNote}
-            onOpenNote={(path) => setActiveNotePath(path)}
-            onInsertContent={handleInsertContent}
-            onOpenModelLibrary={() => setModelLibraryOpen(true)}
-            activeModelName={activeModelName}
-          />
-        }
+        statusBar={<StatusBar
+          summary={vault.summary}
+          saveStatus={autosave.status}
+          activeNote={activeNotePath}
+          onOpenModelLibrary={() => setModelLibraryOpen(true)}
+          activeModelName={activeModelName}
+        />}
+        aiPanel={<AIPanel
+          isOpen={aiPanelOpen}
+          onToggle={() => setAiPanelOpen((o) => !o)}
+          activeNotePath={activeNotePath}
+          activeNoteContent={content}
+          onSaveAsNote={saveAsNote}
+          onOpenNote={(path) => setActiveNotePath(path)}
+          onInsertContent={handleInsertContent}
+          onOpenModelLibrary={() => setModelLibraryOpen(true)}
+          activeModelName={activeModelName}
+        />}
       />
       <VaultPicker
         open={vaultPickerOpen}
