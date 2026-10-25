@@ -315,7 +315,8 @@ except Exception as e:
             poll = proc.poll()
             if poll is not None:
                 # Process finished
-                if active_downloads.get(model_id, {}).get("status") == "paused":
+                status_now = active_downloads.get(model_id, {}).get("status")
+                if status_now in ("paused", "deleted") or model_id not in download_processes:
                     break
 
                 if poll == 0:
@@ -353,6 +354,8 @@ except Exception as e:
                     }
                 break
 
+            if model_id not in active_downloads or model_id not in download_processes:
+                break
             # Still downloading, calculate progress
             _, cur_bytes = is_model_downloaded(model_id, total_gb)
             pct = min(99, max(5, int((cur_bytes / target_bytes) * 100))) if target_bytes > 0 else 5
@@ -390,6 +393,7 @@ def pause_download_task(model_id: str):
 
 def delete_model_from_disk(model_id: str):
     global active_downloads, download_processes, current_model_name
+    active_downloads[model_id] = {"status": "deleted"}
     if current_model_name == model_id:
         unload_current_model()
 
@@ -416,7 +420,19 @@ def delete_model_from_disk(model_id: str):
     repo_folder_name = "models--" + model_id.replace("/", "--")
     repo_path = Path(constants.HUGGINGFACE_HUB_CACHE) / repo_folder_name
     if repo_path.exists():
+        for p_file in repo_path.rglob("*"):
+            try:
+                if p_file.is_symlink():
+                    target = p_file.resolve()
+                    if target.is_file() and "/blobs/" in str(target):
+                        target.unlink(missing_ok=True)
+            except Exception:
+                pass
         shutil.rmtree(repo_path, ignore_errors=True)
+
+    lock_path = Path(constants.HUGGINGFACE_HUB_CACHE) / ".locks" / repo_folder_name
+    if lock_path.exists():
+        shutil.rmtree(lock_path, ignore_errors=True)
 
     if model_id in active_downloads:
         del active_downloads[model_id]
@@ -465,6 +481,8 @@ async def get_models():
         m_id = m["id"]
         downloaded, size_on_disk = is_model_downloaded(m_id, m["size_gb"])
         dl_info = active_downloads.get(m_id)
+        if dl_info and dl_info.get("status") == "deleted":
+            dl_info = None
         
         is_dl = dl_info is not None and dl_info.get("status") == "downloading"
         is_paused = dl_info is not None and dl_info.get("status") == "paused"
@@ -843,4 +861,11 @@ async def notion_ai_endpoint(request: NotionAIRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=43118, log_level="info")
+    uvicorn.run(
+        "server:app",
+        host="127.0.0.1",
+        port=43118,
+        log_level="info",
+        reload=True,
+        app_dir=str(Path(__file__).resolve().parent),
+    )
