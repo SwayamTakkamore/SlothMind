@@ -576,13 +576,66 @@ async def delete_model_endpoint(request: DownloadModelRequest):
 async def download_status_endpoint():
     return {"downloads": active_downloads}
 
+def get_stop_token_ids(tok) -> Optional[List[int]]:
+    if tok is None:
+        return None
+    stop_ids = set()
+    if tok.eos_token_id is not None:
+        if isinstance(tok.eos_token_id, list):
+            stop_ids.update(tok.eos_token_id)
+        else:
+            stop_ids.add(tok.eos_token_id)
+
+    # Special stop tokens for Gemma (<end_of_turn>), Llama (<|eot_id|>), ChatML/Qwen (<|im_end|>)
+    for token_str in [
+        "<end_of_turn>",
+        "<eos>",
+        "</s>",
+        "<|eot_id|>",
+        "<|im_end|>",
+        "<|endoftext|>",
+    ]:
+        try:
+            tid = tok.convert_tokens_to_ids(token_str)
+            if tid is not None and tid != getattr(tok, "unk_token_id", None):
+                stop_ids.add(tid)
+        except Exception:
+            pass
+    return list(stop_ids) if stop_ids else None
+
+def clean_model_output(text: str) -> str:
+    if not text:
+        return ""
+    # Strip turn markers if any leaked through
+    for stop_str in ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>", "<|eot_id|>", "Assistant:", "User:"]:
+        if stop_str in text:
+            text = text.split(stop_str)[0]
+    return text.strip()
+
 def format_chat_prompt(messages: List[ChatMessage]) -> str:
     if tokenizer is not None and hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
         try:
-            msg_dicts = [{"role": m.role, "content": m.content} for m in messages]
-            return tokenizer.apply_chat_template(msg_dicts, tokenize=False, add_generation_prompt=True)
-        except Exception:
+            # Gemma 1 and 2 do not support a "system" role; fold system message into first user turn
+            merged_messages = []
+            pending_system = ""
+            for m in messages:
+                if m.role == "system":
+                    pending_system += (m.content.strip() + "\n\n")
+                elif m.role == "user":
+                    content = (pending_system + m.content).strip()
+                    pending_system = ""
+                    merged_messages.append({"role": "user", "content": content})
+                else:
+                    merged_messages.append({"role": m.role, "content": m.content})
+
+            if pending_system and not merged_messages:
+                merged_messages.append({"role": "user", "content": pending_system.strip()})
+
+            return tokenizer.apply_chat_template(merged_messages, tokenize=False, add_generation_prompt=True)
+        except Exception as e:
+            print(f"apply_chat_template warning: {e}", file=sys.stderr)
             pass
+
     # Simple fallback chat formatting
     prompt = ""
     for msg in messages:
@@ -605,7 +658,8 @@ async def chat(request: ChatRequest):
     try:
         prompt = format_chat_prompt(request.messages)
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        
+        eos_ids = get_stop_token_ids(tokenizer)
+
         streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
         generation_kwargs = dict(
             **inputs,
@@ -615,23 +669,25 @@ async def chat(request: ChatRequest):
             repetition_penalty=1.15,
             do_sample=True,
             pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+            eos_token_id=eos_ids,
         )
-        
+
         thread = threading.Thread(target=model.generate, kwargs=generation_kwargs)
         thread.start()
-        
+
         async def generate():
             try:
                 for text in streamer:
                     if text:
+                        if any(stop_tok in text for stop_tok in ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"]):
+                            break
                         data = json.dumps({"content": text})
                         yield f"data: {data}\n\n"
                 yield "data: [DONE]\n\n"
             except Exception as e:
                 error_data = json.dumps({"error": str(e)})
                 yield f"data: {error_data}\n\n"
-        
+
         return StreamingResponse(generate(), media_type="text/event-stream")
     except HTTPException:
         raise
@@ -646,9 +702,10 @@ async def summarize(request: SummarizeRequest):
             detail="No AI model is currently active. Please open the Model Library to activate or download a model.",
         )
     try:
-        prompt = f"User: Summarize the following text concisely:\n\n{request.text}\n\nAssistant: "
+        prompt = format_chat_prompt([ChatMessage(role="user", content=f"Summarize the following text concisely:\n\n{request.text}")])
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        
+        eos_ids = get_stop_token_ids(tokenizer)
+
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -657,11 +714,11 @@ async def summarize(request: SummarizeRequest):
                 repetition_penalty=1.15,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
+                eos_token_id=eos_ids,
             )
-        
-        response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-        return {"summary": response.strip()}
+
+        response = clean_model_output(tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True))
+        return {"summary": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -680,10 +737,10 @@ async def rewrite(request: RewriteRequest):
             "explain": "Explain this text in simpler terms",
         }
         instruction = instruction_map.get(request.instruction, request.instruction)
-        
-        prompt = f"User: {instruction}:\n\n{request.text}\n\nAssistant: "
+        prompt = format_chat_prompt([ChatMessage(role="user", content=f"{instruction}:\n\n{request.text}")])
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        
+        eos_ids = get_stop_token_ids(tokenizer)
+
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
@@ -692,11 +749,11 @@ async def rewrite(request: RewriteRequest):
                 repetition_penalty=1.15,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
+                eos_token_id=eos_ids,
             )
-        
-        response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
-        return {"rewritten": response.strip()}
+
+        response = clean_model_output(tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True))
+        return {"rewritten": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -806,9 +863,10 @@ async def notion_ai_endpoint(request: NotionAIRequest):
         )
     try:
         instruction = build_notion_instruction(request)
-        prompt = f"User: {instruction}\n\nAssistant: "
+        prompt = format_chat_prompt([ChatMessage(role="user", content=instruction)])
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
         max_tokens = min(request.max_tokens or 512, 1024)
+        eos_ids = get_stop_token_ids(tokenizer)
 
         if request.stream:
             streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
@@ -820,7 +878,7 @@ async def notion_ai_endpoint(request: NotionAIRequest):
                 repetition_penalty=1.15,
                 do_sample=True,
                 pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id,
+                eos_token_id=eos_ids,
             )
             thread = threading.Thread(target=model.generate, kwargs=generation_kwargs)
             thread.start()
@@ -829,6 +887,8 @@ async def notion_ai_endpoint(request: NotionAIRequest):
                 try:
                     for text in streamer:
                         if text:
+                            if any(stop_tok in text for stop_tok in ["<end_of_turn>", "<start_of_turn>", "<|im_end|>", "<|im_start|>"]):
+                                break
                             data = json.dumps({"content": text, "task": request.task})
                             yield f"data: {data}\n\n"
                     yield "data: [DONE]\n\n"
@@ -846,13 +906,14 @@ async def notion_ai_endpoint(request: NotionAIRequest):
                     repetition_penalty=1.15,
                     do_sample=True,
                     pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
+                    eos_token_id=eos_ids,
                 )
-            response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+            raw_response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+            response = clean_model_output(raw_response)
             return {
                 "status": "ok",
                 "task": request.task,
-                "result": response.strip(),
+                "result": response,
             }
     except HTTPException:
         raise
