@@ -101,6 +101,7 @@ export interface ModelInfo {
 
 export interface ModelsResponse {
   active_model: string | null;
+  last_active_model?: string | null;
   device: {
     device?: string;
     gpu?: string;

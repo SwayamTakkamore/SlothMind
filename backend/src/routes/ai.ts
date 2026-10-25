@@ -5,13 +5,30 @@ import * as hfService from '../services/hfService';
 import { RetrievalService } from '../services/retrieval';
 import * as ragService from '../services/ragService';
 
+interface HealthData {
+  status: string;
+  provider?: string;
+  device?: string;
+  gpu?: string;
+  active_model?: string | null;
+  model?: string | null;
+  last_active_model?: string | null;
+  loaded?: boolean;
+  models_available?: number;
+}
+
 export function aiRouter(session: VaultSession): Router {
   const router = Router();
 
   router.get('/health', asyncHandler(async (_req, res) => {
     try {
-      const health = await hfService.getHealth();
-      res.json(health);
+      const health = (await hfService.getHealth()) as HealthData;
+      const activeModel = health.active_model ?? health.model ?? null;
+      res.json({
+        ...health,
+        active_model: activeModel,
+        model: activeModel,
+      });
     } catch {
       res.status(503).json({
         error: {

@@ -24,11 +24,14 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
       const res = await api.getModels();
       setData(res);
       setErrorMsg(null);
+      if (res.active_model) {
+        onModelChanged?.(res.active_model);
+      }
     } catch (err) {
       console.error('Failed to fetch models:', err);
       setErrorMsg('Could not connect to AI service. Ensure ai-service is running.');
     }
-  }, []);
+  }, [onModelChanged]);
 
   useEffect(() => {
     if (open) {
@@ -54,6 +57,7 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
     setErrorMsg(null);
     try {
       await api.activateModel(modelId);
+      localStorage.setItem('slothmind_last_active_model', modelId);
       await fetchModels();
       onModelChanged?.(modelId);
     } catch (err: unknown) {
@@ -69,6 +73,7 @@ export function ModelLibraryModal({ open, onClose, onModelChanged }: ModelLibrar
     setErrorMsg(null);
     try {
       await api.unloadModel();
+      localStorage.removeItem('slothmind_last_active_model');
       await fetchModels();
       onModelChanged?.(null);
     } catch (err: unknown) {

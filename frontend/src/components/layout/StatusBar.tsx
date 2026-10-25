@@ -33,7 +33,7 @@ export function StatusBar({
   const { text: statusText, className: statusClass } = saveLabel(saveStatus);
   const vaultName = summary.vault?.name ?? 'No vault open';
   const vaultPath = summary.vault?.path ?? 'None';
-  const [aiStatus, setAiStatus] = useState<{ status: string; provider?: string; device?: string; gpu?: string; model?: string | null } | null>(null);
+  const [aiStatus, setAiStatus] = useState<{ status: string; provider?: string; device?: string; gpu?: string; model?: string | null; active_model?: string | null } | null>(null);
 
   useEffect(() => {
     fetch('/api/ai/health')
@@ -43,7 +43,7 @@ export function StatusBar({
   }, [activeModelName]);
 
   const aiReady = aiStatus?.status === 'ok';
-  const currentModel = activeModelName !== undefined ? activeModelName : aiStatus?.model;
+  const currentModel = (activeModelName !== undefined && activeModelName !== null) ? activeModelName : (aiStatus?.active_model || aiStatus?.model || null);
   const currentModelShort = currentModel ? currentModel.split('/')[1] || currentModel : null;
 
   return (

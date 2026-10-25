@@ -146,4 +146,22 @@ describe('ModelLibraryModal', () => {
     expect(window.confirm).toHaveBeenCalled();
     expect(api.deleteModel).toHaveBeenCalledWith('google/gemma-3-1b-it');
   });
+
+  it('calls onModelChanged and saves to localStorage on model activation', async () => {
+    const handleModelChanged = vi.fn();
+    vi.mocked(api.activateModel).mockResolvedValue({ status: 'ok', active_model: 'google/gemma-3-1b-it', message: 'Success' });
+
+    await act(async () => {
+      render(<ModelLibraryModal open={true} onClose={() => {}} onModelChanged={handleModelChanged} />);
+    });
+
+    const activateBtn = screen.getByText('ACTIVATE MODEL');
+    await act(async () => {
+      fireEvent.click(activateBtn);
+    });
+
+    expect(api.activateModel).toHaveBeenCalledWith('google/gemma-3-1b-it');
+    expect(handleModelChanged).toHaveBeenCalledWith('google/gemma-3-1b-it');
+    expect(localStorage.getItem('slothmind_last_active_model')).toBe('google/gemma-3-1b-it');
+  });
 });

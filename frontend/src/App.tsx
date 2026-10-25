@@ -56,17 +56,90 @@ export default function App() {
 
   const refreshTree = useCallback(() => setTreeKey((k) => k + 1), []);
 
+  const handleModelChanged = useCallback((modelId: string | null) => {
+    setActiveModelName(modelId);
+    if (modelId) {
+      localStorage.setItem('slothmind_last_active_model', modelId);
+    } else {
+      localStorage.removeItem('slothmind_last_active_model');
+    }
+  }, []);
+
+  // Auto-detect currently running model or auto-load last used model if ready
   useEffect(() => {
-    fetch('/api/ai/health')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.model) {
-          setActiveModelName(data.model);
+    let cancelled = false;
+
+    async function initModel() {
+      try {
+        const [healthData, modelsData] = await Promise.all([
+          fetch('/api/ai/health')
+            .then((res) => (res.ok ? res.json() : null))
+            .catch(() => null),
+          api.getModels().catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        // 1. If a model is already active in GPU VRAM, immediately sync active state
+        const runningModel =
+          healthData?.active_model ||
+          healthData?.model ||
+          modelsData?.active_model;
+
+        if (runningModel) {
+          setActiveModelName(runningModel);
+          localStorage.setItem('slothmind_last_active_model', runningModel);
+          return;
+        }
+
+        // 2. Otherwise, check last used model from localStorage or backend state
+        const lastUsedId =
+          localStorage.getItem('slothmind_last_active_model') ||
+          modelsData?.last_active_model;
+
+        const allModels = modelsData?.models || [];
+
+        let modelToAutoLoad: string | null = null;
+        if (lastUsedId) {
+          const matched = allModels.find((m) => m.id === lastUsedId);
+          if (matched && matched.is_downloaded) {
+            modelToAutoLoad = matched.id;
+          }
+        }
+
+        // 3. Fallback: if no last used model, check if any model is downloaded (prefer gemma-3-1b-it)
+        if (!modelToAutoLoad) {
+          const downloaded = allModels.filter((m) => m.is_downloaded);
+          if (downloaded.length > 0) {
+            const preferred =
+              downloaded.find((m) => m.id.includes('gemma-3-1b-it')) ||
+              downloaded[0];
+            modelToAutoLoad = preferred.id;
+          }
+        }
+
+        // 4. Auto-load the ready model into GPU VRAM
+        if (modelToAutoLoad) {
+          console.log(`[SlothMind] Auto-loading ready model: ${modelToAutoLoad}`);
+          const res = await api.activateModel(modelToAutoLoad);
+          if (!cancelled && res?.status === 'ok') {
+            setActiveModelName(modelToAutoLoad);
+            localStorage.setItem('slothmind_last_active_model', modelToAutoLoad);
+          }
         } else {
           setActiveModelName(null);
         }
-      })
-      .catch(() => setActiveModelName(null));
+      } catch (err) {
+        console.warn('[SlothMind] Could not auto-load model:', err);
+        if (!cancelled) setActiveModelName(null);
+      }
+    }
+
+    initModel();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -353,7 +426,7 @@ export default function App() {
       <ModelLibraryModal
         open={modelLibraryOpen}
         onClose={() => setModelLibraryOpen(false)}
-        onModelChanged={(modelId) => setActiveModelName(modelId)}
+        onModelChanged={handleModelChanged}
       />
       <NotionAIModal
         open={notionModalOpen}

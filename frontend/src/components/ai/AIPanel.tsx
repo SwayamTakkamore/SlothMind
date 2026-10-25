@@ -44,6 +44,7 @@ interface AIStatus {
   device?: string;
   gpu?: string;
   model?: string | null;
+  active_model?: string | null;
 }
 
 interface AIPanelProps {
@@ -88,7 +89,7 @@ export function AIPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const currentActiveModel = activeModelName !== undefined ? activeModelName : aiStatus?.model;
+  const currentActiveModel = (activeModelName !== undefined && activeModelName !== null) ? activeModelName : (aiStatus?.active_model || aiStatus?.model || null);
 
   const runNotionTask = useCallback(
     async (

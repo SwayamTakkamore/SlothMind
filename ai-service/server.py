@@ -29,6 +29,27 @@ device_info = {}
 # Background download tracking
 active_downloads: Dict[str, dict] = {}
 
+LAST_MODEL_FILE = Path(constants.HUGGINGFACE_HUB_CACHE) / ".slothmind_last_model.json"
+
+def save_last_active_model(model_id: Optional[str]):
+    try:
+        LAST_MODEL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(LAST_MODEL_FILE, "w") as f:
+            json.dump({"last_active_model": model_id}, f)
+    except Exception as e:
+        print(f"Warning: could not persist last active model: {e}", file=sys.stderr)
+
+def get_last_active_model() -> Optional[str]:
+    try:
+        if LAST_MODEL_FILE.exists():
+            with open(LAST_MODEL_FILE, "r") as f:
+                data = json.load(f)
+                return data.get("last_active_model")
+    except Exception:
+        pass
+    return None
+
+
 AVAILABLE_MODELS = [
     {
         "id": "google/gemma-3-1b-it",
@@ -228,6 +249,7 @@ def unload_current_model():
         del tokenizer
         tokenizer = None
     current_model_name = None
+    save_last_active_model(None)
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     print("Model unloaded, VRAM cleared.", file=sys.stderr)
@@ -265,6 +287,7 @@ def load_selected_model(model_id: str):
         model = model.to(device)
 
     current_model_name = model_id
+    save_last_active_model(model_id)
     print(f"Successfully loaded and activated {model_id}", file=sys.stderr)
 
 # Background download tracking and subprocess management
@@ -440,7 +463,18 @@ def delete_model_from_disk(model_id: str):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_hardware()
-    # NO MODEL IS LOADED BY DEFAULT.
+    # Auto-load last active model if downloaded and ready
+    last_model = get_last_active_model()
+    if last_model:
+        meta = next((m for m in AVAILABLE_MODELS if m["id"] == last_model), None)
+        expected_gb = meta["size_gb"] if meta else None
+        downloaded, _ = is_model_downloaded(last_model, expected_gb)
+        if downloaded:
+            try:
+                print(f"Auto-loading last active model on startup: {last_model}", file=sys.stderr)
+                load_selected_model(last_model)
+            except Exception as e:
+                print(f"Could not auto-load last model {last_model}: {e}", file=sys.stderr)
     yield
     unload_current_model()
     # Clean up any running download processes
@@ -470,6 +504,8 @@ async def health():
         "device": device_info.get("device", device),
         "gpu": gpu_name,
         "active_model": current_model_name,
+        "model": current_model_name,
+        "last_active_model": get_last_active_model(),
         "loaded": model is not None,
         "models_available": len(AVAILABLE_MODELS),
     }
@@ -506,6 +542,7 @@ async def get_models():
         
     return {
         "active_model": current_model_name,
+        "last_active_model": get_last_active_model(),
         "device": device_info,
         "models": results,
     }
