@@ -5,20 +5,35 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import Placeholder from '@tiptap/extension-placeholder';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { Extension, InputRule } from '@tiptap/core';
 import {
   Bold,
+  CheckSquare,
   Code,
+  Columns,
   FileCode,
   Heading1,
   Heading2,
   Heading3,
   Italic,
+  Link as LinkIcon,
   List,
   ListOrdered,
+  Minus,
   Quote,
+  Rows,
   Sparkles,
   Strikethrough,
+  Table as TableIcon,
   Terminal,
+  Trash2,
+  Underline as UnderlineIcon,
 } from 'lucide-react';
 import { NotionAIFloatingToolbar } from '../notion/NotionAIFloatingToolbar';
 
@@ -38,6 +53,45 @@ function getEditorMarkdown(editorInstance: EditorInstance): string {
   return storage.markdown?.getMarkdown?.() ?? '';
 }
 
+// Custom dynamic markdown input rules (e.g. typing '| ' creates table, '--- ' creates horizontal rule)
+const DynamicMarkdownRules = Extension.create({
+  name: 'dynamicMarkdownRules',
+  addInputRules() {
+    return [
+      // Typing '| ' at start of line creates a 3x3 table with header row
+      new InputRule({
+        find: /^\|\s$/,
+        handler: ({ chain, range }) => {
+          chain()
+            .deleteRange(range)
+            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+            .run();
+        },
+      }),
+      // Typing '--- ' or '*** ' creates horizontal rule divider
+      new InputRule({
+        find: /^(?:---|—-|___\s|\*\*\*\s)$/,
+        handler: ({ chain, range }) => {
+          chain()
+            .deleteRange(range)
+            .setHorizontalRule()
+            .run();
+        },
+      }),
+      // Typing '[ ] ' or '[] ' creates interactive task list
+      new InputRule({
+        find: /^\[\s?\]\s$/,
+        handler: ({ chain, range }) => {
+          chain()
+            .deleteRange(range)
+            .toggleTaskList()
+            .run();
+        },
+      }),
+    ];
+  },
+});
+
 export function MarkdownEditor({
   value,
   onChange,
@@ -56,9 +110,25 @@ export function MarkdownEditor({
         heading: {
           levels: [1, 2, 3],
         },
+        link: {
+          openOnClick: false,
+          autolink: true,
+          defaultProtocol: 'https',
+        },
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      DynamicMarkdownRules,
       Placeholder.configure({
-        placeholder: "Type '#' for Heading 1, '##' for Heading 2, or press Ctrl+J / type /ai for Notion AI...",
+        placeholder: "Type '#' for Heading, '| ' for Table, '---' for Divider, '[ ]' for Task, or Ctrl+J / /ai for Notion AI...",
         emptyEditorClass: 'is-editor-empty',
       }),
       Markdown.configure({
@@ -82,15 +152,29 @@ export function MarkdownEditor({
           return true;
         }
 
-        // Enter key shortcuts (/ai, /h1, /h2, /h3)
+        // Ctrl+K for Link
+        if ((event.ctrlKey || event.metaKey) && (event.key === 'k' || event.key === 'K') && editor) {
+          event.preventDefault();
+          const previousUrl = editor.getAttributes('link').href;
+          const url = window.prompt('Enter URL:', previousUrl);
+          if (url === null) return true;
+          if (url === '') {
+            editor.chain().focus().extendMarkRange('link').unsetLink().run();
+          } else {
+            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+          }
+          return true;
+        }
+
+        // Enter key dynamic markdown shortcuts
         if (event.key === 'Enter' && editor) {
           const { state } = editor;
           const { $from } = state.selection;
           const currentLineText = $from.parent.textContent.trim();
 
+          // /ai shortcut
           if (currentLineText === '/ai') {
             event.preventDefault();
-            // Clear current line and open Notion AI
             editor.commands.deleteRange({
               from: $from.start(),
               to: $from.end(),
@@ -99,6 +183,64 @@ export function MarkdownEditor({
             return true;
           }
 
+          // Horizontal Rule / Divider shortcuts: '---', '***', '___', '/hr', '/divider'
+          if (
+            currentLineText === '---' ||
+            currentLineText === '***' ||
+            currentLineText === '___' ||
+            currentLineText === '/hr' ||
+            currentLineText === '/divider'
+          ) {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.setHorizontalRule();
+            return true;
+          }
+
+          // Table shortcut: '|', '/table', '/tbl'
+          if (
+            currentLineText === '|' ||
+            currentLineText === '/table' ||
+            currentLineText === '/tbl'
+          ) {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true });
+            return true;
+          }
+
+          // Table header syntax: '| Col 1 | Col 2 |' or '| Header |'
+          if (currentLineText.startsWith('|') && currentLineText.endsWith('|')) {
+            const columns = currentLineText
+              .split('|')
+              .map((c) => c.trim())
+              .filter(Boolean);
+            if (columns.length >= 1) {
+              event.preventDefault();
+              editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+              editor.commands.insertTable({
+                rows: 2,
+                cols: columns.length,
+                withHeaderRow: true,
+              });
+              return true;
+            }
+          }
+
+          // Task list / Checkbox shortcuts: '[]', '[ ]', '/todo', '/task'
+          if (
+            currentLineText === '[]' ||
+            currentLineText === '[ ]' ||
+            currentLineText === '/todo' ||
+            currentLineText === '/task'
+          ) {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.toggleTaskList();
+            return true;
+          }
+
+          // Heading shortcuts: /h1, /1, /h2, /2, /h3, /3
           if (currentLineText === '/h1' || currentLineText === '/1') {
             event.preventDefault();
             editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
@@ -117,6 +259,22 @@ export function MarkdownEditor({
             event.preventDefault();
             editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
             editor.commands.setHeading({ level: 3 });
+            return true;
+          }
+
+          // Blockquote shortcut: /quote
+          if (currentLineText === '/quote') {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.toggleBlockquote();
+            return true;
+          }
+
+          // Code block shortcut: /code
+          if (currentLineText === '/code') {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.toggleCodeBlock();
             return true;
           }
         }
@@ -150,6 +308,19 @@ export function MarkdownEditor({
       isUpdatingFromExternal.current = false;
     }
   }, [value, editor]);
+
+  // Handle link prompt in toolbar
+  const handleLinkButton = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('Enter URL:', previousUrl);
+    if (url === null) return;
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }
+  }, [editor]);
 
   // Handle textarea selection in raw source mode
   const handleTextareaSelect = useCallback(() => {
@@ -188,6 +359,8 @@ export function MarkdownEditor({
     }
   };
 
+  const isInsideTable = editor?.isActive('table') ?? false;
+
   if (preview) {
     return (
       <div className="h-full overflow-y-auto px-10 py-8">
@@ -212,6 +385,7 @@ export function MarkdownEditor({
       {/* Dynamic Markdown Format Bar */}
       <div className="flex flex-wrap items-center justify-between border-b border-sloth-border/70 bg-sloth-panel/50 px-6 py-1.5 select-none text-xs">
         <div className="flex items-center gap-0.5 flex-wrap">
+          {/* Headings */}
           <button
             onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
             disabled={!editor}
@@ -256,6 +430,7 @@ export function MarkdownEditor({
 
           <div className="h-4 w-px bg-sloth-border mx-1" />
 
+          {/* Inline styles */}
           <button
             onClick={() => editor?.chain().focus().toggleBold().run()}
             disabled={!editor}
@@ -280,6 +455,19 @@ export function MarkdownEditor({
             title="Italic (*text*)"
           >
             <Italic size={13} />
+          </button>
+
+          <button
+            onClick={() => editor?.chain().focus().toggleUnderline().run()}
+            disabled={!editor}
+            className={`rounded-lg p-1.5 transition ${
+              editor?.isActive('underline')
+                ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+            }`}
+            title="Underline (Ctrl+U)"
+          >
+            <UnderlineIcon size={13} />
           </button>
 
           <button
@@ -308,8 +496,22 @@ export function MarkdownEditor({
             <Code size={13} />
           </button>
 
+          <button
+            onClick={handleLinkButton}
+            disabled={!editor}
+            className={`rounded-lg p-1.5 transition ${
+              editor?.isActive('link')
+                ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+            }`}
+            title="Insert Link (Ctrl+K)"
+          >
+            <LinkIcon size={13} />
+          </button>
+
           <div className="h-4 w-px bg-sloth-border mx-1" />
 
+          {/* Lists & Tasks */}
           <button
             onClick={() => editor?.chain().focus().toggleBulletList().run()}
             disabled={!editor}
@@ -337,6 +539,19 @@ export function MarkdownEditor({
           </button>
 
           <button
+            onClick={() => editor?.chain().focus().toggleTaskList().run()}
+            disabled={!editor}
+            className={`rounded-lg p-1.5 transition ${
+              editor?.isActive('taskList')
+                ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
+                : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
+            }`}
+            title="Task List / Checkbox (Type '[ ] ' or '- [ ] ')"
+          >
+            <CheckSquare size={13} />
+          </button>
+
+          <button
             onClick={() => editor?.chain().focus().toggleBlockquote().run()}
             disabled={!editor}
             className={`rounded-lg p-1.5 transition ${
@@ -361,6 +576,74 @@ export function MarkdownEditor({
           >
             <FileCode size={13} />
           </button>
+
+          {/* Horizontal Rule Divider */}
+          <button
+            onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+            disabled={!editor}
+            className="rounded-lg p-1.5 transition text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text"
+            title="Divider / Horizontal Rule (Type '---' on new line)"
+          >
+            <Minus size={13} />
+          </button>
+
+          <div className="h-4 w-px bg-sloth-border mx-1" />
+
+          {/* Table Controls */}
+          {!isInsideTable ? (
+            <button
+              onClick={() =>
+                editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+              }
+              disabled={!editor}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 transition text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text"
+              title="Insert Table (Type '| ' or '| Col 1 | Col 2 |' on new line)"
+            >
+              <TableIcon size={13} />
+              <span className="text-[11px]">Table</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 bg-sloth-surface px-1.5 py-0.5 rounded-lg border border-sloth-border">
+              <span className="text-[10px] font-semibold text-sloth-accent mr-0.5">Table:</span>
+              <button
+                onClick={() => editor?.chain().focus().addRowAfter().run()}
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] text-sloth-subtle hover:bg-sloth-panel hover:text-sloth-text"
+                title="Add row below"
+              >
+                <Rows size={11} />
+                <span>+Row</span>
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().addColumnAfter().run()}
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] text-sloth-subtle hover:bg-sloth-panel hover:text-sloth-text"
+                title="Add column right"
+              >
+                <Columns size={11} />
+                <span>+Col</span>
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().deleteRow().run()}
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] text-sloth-subtle hover:bg-red-500/10 hover:text-red-500"
+                title="Delete current row"
+              >
+                <span>-Row</span>
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().deleteColumn().run()}
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] text-sloth-subtle hover:bg-red-500/10 hover:text-red-500"
+                title="Delete current column"
+              >
+                <span>-Col</span>
+              </button>
+              <button
+                onClick={() => editor?.chain().focus().deleteTable().run()}
+                className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] text-red-500 hover:bg-red-500/15"
+                title="Delete table"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Mode Switcher: Dynamic vs Raw Markdown Source */}

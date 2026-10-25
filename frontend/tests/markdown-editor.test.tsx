@@ -3,7 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MarkdownEditor } from '../src/components/editor/MarkdownEditor';
 
 describe('MarkdownEditor Component', () => {
-  it('renders in Dynamic mode by default with quick format bar', async () => {
+  it('renders in Dynamic mode by default with full quick format bar including tables and dividers', async () => {
     await act(async () => {
       render(
         <MarkdownEditor
@@ -20,6 +20,11 @@ describe('MarkdownEditor Component', () => {
     expect(screen.getByTitle(/Heading 3/i)).toBeDefined();
     expect(screen.getByTitle(/Bold/i)).toBeDefined();
     expect(screen.getByTitle(/Italic/i)).toBeDefined();
+    expect(screen.getByTitle(/Underline/i)).toBeDefined();
+    expect(screen.getByTitle(/Insert Link/i)).toBeDefined();
+    expect(screen.getByTitle(/Task List/i)).toBeDefined();
+    expect(screen.getByTitle(/Divider/i)).toBeDefined();
+    expect(screen.getByTitle(/Insert Table/i)).toBeDefined();
     expect(screen.getByTitle(/Blockquote/i)).toBeDefined();
 
     // Mode toggles
