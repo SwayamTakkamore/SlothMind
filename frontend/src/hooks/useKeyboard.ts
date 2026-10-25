@@ -8,9 +8,17 @@ interface Shortcuts {
   onNewNote?: () => void;
   onSettings?: () => void;
   onToggleTheme?: () => void;
+  onNotionAI?: () => void;
 }
 
-export function useKeyboard({ onSearch, onSave, onNewNote, onSettings, onToggleTheme }: Shortcuts) {
+export function useKeyboard({
+  onSearch,
+  onSave,
+  onNewNote,
+  onSettings,
+  onToggleTheme,
+  onNotionAI,
+}: Shortcuts) {
   useEffect(() => {
     const handler: Handler = (event) => {
       const key = event.key.toLowerCase();
@@ -31,6 +39,11 @@ export function useKeyboard({ onSearch, onSave, onNewNote, onSettings, onToggleT
         onNewNote?.();
         return;
       }
+      if (mod && key === 'j') {
+        event.preventDefault();
+        onNotionAI?.();
+        return;
+      }
       if (mod && key === ',') {
         event.preventDefault();
         onSettings?.();
@@ -44,5 +57,5 @@ export function useKeyboard({ onSearch, onSave, onNewNote, onSettings, onToggleT
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onNewNote, onSave, onSearch, onSettings, onToggleTheme]);
+  }, [onNewNote, onSave, onSearch, onSettings, onToggleTheme, onNotionAI]);
 }

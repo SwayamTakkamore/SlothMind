@@ -7,6 +7,8 @@ import type {
   SearchResponse,
   VaultInfo,
   VaultSummary,
+  NotionAIRequest,
+  NotionAIResponse,
 } from '../types';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -97,4 +99,9 @@ export const api = {
     body: JSON.stringify({ model_id }),
   }),
   getDownloadStatus: () => request<{ downloads: Record<string, unknown> }>('/api/ai/models/download-status'),
+  notionAI: (req: NotionAIRequest) => request<NotionAIResponse>('/api/ai/notion-ai', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(req),
+  }),
 };

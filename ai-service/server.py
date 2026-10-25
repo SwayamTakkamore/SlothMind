@@ -124,6 +124,16 @@ class RewriteRequest(BaseModel):
     text: str
     instruction: str
 
+class NotionAIRequest(BaseModel):
+    task: str  # draft, edit, improve, fix-grammar, make-shorter, make-longer, simplify, change-tone, translate, explain, action-items, summarize, key-takeaways, continue
+    text: Optional[str] = ""
+    prompt: Optional[str] = ""
+    template_type: Optional[str] = None
+    tone: Optional[str] = None
+    target_language: Optional[str] = None
+    max_tokens: Optional[int] = 512
+    stream: Optional[bool] = False
+
 class ActivateModelRequest(BaseModel):
     model_id: str
 
@@ -474,6 +484,165 @@ async def rewrite(request: RewriteRequest):
         
         response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
         return {"rewritten": response.strip()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def build_notion_instruction(req: NotionAIRequest) -> str:
+    task = req.task
+    text = (req.text or "").strip()
+    prompt = (req.prompt or "").strip()
+    template = req.template_type or ""
+    tone = req.tone or "professional"
+    lang = req.target_language or "Spanish"
+
+    if task == "draft":
+        if template == "brainstorm":
+            return f"Brainstorm 8 to 10 creative, actionable ideas and strategic angles for: {prompt}. Format as a clear Markdown bullet list with brief explanations."
+        elif template == "blog-post":
+            return f"Write an engaging, well-structured blog post in Markdown about: {prompt}. Include an introduction, subheadings (##), key insights, and a conclusion."
+        elif template == "prd":
+            return f"Draft a comprehensive Product Requirements Document (PRD) in Markdown for: {prompt}. Include Problem Statement, Target Personas, Key User Stories, Functional Requirements, and Success Metrics."
+        elif template == "meeting-agenda":
+            return f"Create a structured meeting agenda in Markdown for: {prompt}. Include Meeting Objective, Discussion Topics with estimated minutes, and Next Steps."
+        elif template == "email":
+            return f"Draft a professional, compelling email about: {prompt}. Include a Subject Line, clear message body, and a specific Call to Action."
+        elif template == "press-release":
+            return f"Draft a formal press release in Markdown announcing: {prompt}. Include Headline, City/Date, Executive Quote, Key Highlights, and Media Contact."
+        elif template == "job-description":
+            return f"Write a detailed job description in Markdown for: {prompt}. Include Role Overview, Core Responsibilities, Required Qualifications, and Why Join Us."
+        elif template == "essay-outline":
+            return f"Create a detailed outline in Markdown for an article or essay on: {prompt}. Include Thesis, Major Sections, and Supporting Arguments."
+        else:
+            return f"Write a high-quality, comprehensive draft in Markdown about: {prompt}."
+
+    elif task in ("edit", "improve"):
+        return f"""Improve the writing of the following text. Enhance clarity, flow, vocabulary, and impact while preserving the exact meaning:
+
+{text}"""
+
+    elif task in ("fix-grammar", "fix_grammar"):
+        return f"""Fix all grammar, spelling, typos, and punctuation errors in the following text. Do not alter the intended meaning:
+
+{text}"""
+
+    elif task in ("make-shorter", "make_shorter"):
+        return f"""Condense and shorten the following text into concise, punchy prose. Eliminate filler words while retaining core information:
+
+{text}"""
+
+    elif task in ("make-longer", "make_longer"):
+        return f"""Expand and elaborate on the following text. Add depth, context, supporting explanation, and vivid detail without repetitive filler:
+
+{text}"""
+
+    elif task in ("simplify", "simplify_language"):
+        return f"""Rewrite the following text in plain, simple, jargon-free English so that anyone can easily understand it:
+
+{text}"""
+
+    elif task in ("change-tone", "change_tone"):
+        return f"""Rewrite the following text in a {tone} tone. Keep the core facts and message intact:
+
+{text}"""
+
+    elif task == "translate":
+        return f"""Translate the following text accurately into {lang}. Preserve all formatting, technical terms, and tone:
+
+{text}"""
+
+    elif task == "explain":
+        return f"""Explain the following concept or text simply and clearly. Break down complex points step by step:
+
+{text}"""
+
+    elif task in ("action-items", "action_items"):
+        return f"""Analyze the following text or meeting notes. Extract every concrete action item, task, and commitment. Format strictly as a clean Markdown checklist using - [ ] Task description (Owner: Name if mentioned):
+
+{text}"""
+
+    elif task == "summarize":
+        return f"""Provide a concise executive summary of the following text in 2-3 clear paragraphs:
+
+{text}"""
+
+    elif task in ("key-takeaways", "key_takeaways", "takeaways"):
+        return f"""Extract 4 to 6 key bullet-point takeaways and critical decisions from the following text:
+
+{text}"""
+
+    elif task in ("continue", "continue_writing"):
+        return f"""Continue writing seamlessly from the end of the following text, matching its voice, style, and flow:
+
+{text}"""
+
+    elif prompt:
+        return f"""{prompt}:
+
+{text}""" if text else prompt
+
+    return f"""Improve and polish the following text:
+
+{text}"""
+
+@app.post("/notion-ai")
+async def notion_ai_endpoint(request: NotionAIRequest):
+    if model is None or tokenizer is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No AI model is currently active. Please open the Model Library to activate or download a model.",
+        )
+    try:
+        instruction = build_notion_instruction(request)
+        prompt = f"User: {instruction}\n\nAssistant: "
+        inputs = tokenizer(prompt, return_tensors="pt").to(device)
+        max_tokens = min(request.max_tokens or 512, 1024)
+
+        if request.stream:
+            streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+            generation_kwargs = dict(
+                **inputs,
+                streamer=streamer,
+                max_new_tokens=max_tokens,
+                temperature=0.3,
+                repetition_penalty=1.15,
+                do_sample=True,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+            thread = threading.Thread(target=model.generate, kwargs=generation_kwargs)
+            thread.start()
+
+            async def generate():
+                try:
+                    for text in streamer:
+                        if text:
+                            data = json.dumps({"content": text, "task": request.task})
+                            yield f"data: {data}\n\n"
+                    yield "data: [DONE]\n\n"
+                except Exception as e:
+                    error_data = json.dumps({"error": str(e)})
+                    yield f"data: {error_data}\n\n"
+
+            return StreamingResponse(generate(), media_type="text/event-stream")
+        else:
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs,
+                    max_new_tokens=max_tokens,
+                    temperature=0.3,
+                    repetition_penalty=1.15,
+                    do_sample=True,
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
+            response = tokenizer.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+            return {
+                "status": "ok",
+                "task": request.task,
+                "result": response.strip(),
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

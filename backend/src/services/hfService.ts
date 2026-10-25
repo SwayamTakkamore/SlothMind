@@ -14,6 +14,17 @@ export interface ChatRequest {
   stream?: boolean;
 }
 
+export interface NotionAIRequest {
+  task: string;
+  text?: string;
+  prompt?: string;
+  template_type?: string;
+  tone?: string;
+  target_language?: string;
+  max_tokens?: number;
+  stream?: boolean;
+}
+
 export async function getHealth() {
   const res = await fetch(`${HF_SERVICE_URL}/health`);
   if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
@@ -114,4 +125,19 @@ export async function rewrite(text: string, instruction: string) {
     throw new Error(`Rewrite failed: ${res.status} ${textErr}`);
   }
   return await res.json();
+}
+
+export async function notionAI(request: NotionAIRequest) {
+  const res = await fetch(`${HF_SERVICE_URL}/notion-ai`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const textErr = await res.text();
+    throw new Error(`Notion AI failed: ${res.status} ${textErr}`);
+  }
+  return res;
 }

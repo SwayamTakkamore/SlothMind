@@ -108,3 +108,53 @@ export interface ModelsResponse {
   };
   models: ModelInfo[];
 }
+
+export type NotionAITask =
+  | 'draft'
+  | 'edit'
+  | 'improve'
+  | 'fix-grammar'
+  | 'make-shorter'
+  | 'make-longer'
+  | 'simplify'
+  | 'change-tone'
+  | 'translate'
+  | 'explain'
+  | 'action-items'
+  | 'summarize'
+  | 'key-takeaways'
+  | 'continue';
+
+export type NotionAITemplate =
+  | 'brainstorm'
+  | 'blog-post'
+  | 'prd'
+  | 'meeting-agenda'
+  | 'email'
+  | 'press-release'
+  | 'job-description'
+  | 'essay-outline';
+
+export type NotionAITone =
+  | 'professional'
+  | 'casual'
+  | 'direct'
+  | 'confident'
+  | 'friendly';
+
+export interface NotionAIRequest {
+  task: NotionAITask | string;
+  text?: string;
+  prompt?: string;
+  template_type?: NotionAITemplate | string;
+  tone?: NotionAITone | string;
+  target_language?: string;
+  max_tokens?: number;
+  stream?: boolean;
+}
+
+export interface NotionAIResponse {
+  status: string;
+  task: string;
+  result: string;
+}

@@ -309,6 +309,67 @@ export function aiRouter(session: VaultSession): Router {
     }
   }));
 
+  router.post('/notion-ai', asyncHandler(async (req, res) => {
+    try {
+      const { task, text, prompt, template_type, tone, target_language, max_tokens, stream } = req.body;
+      if (!task || typeof task !== 'string') {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_INPUT',
+            message: '"task" is required and must be a string.',
+          },
+        });
+      }
+
+      const response = await hfService.notionAI({
+        task,
+        text,
+        prompt,
+        template_type,
+        tone,
+        target_language,
+        max_tokens,
+        stream: Boolean(stream),
+      });
+
+      if (stream) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        if (response.body) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              res.write(decoder.decode(value, { stream: true }));
+            }
+          } catch (err) {
+            console.error('Notion AI stream error:', err);
+          } finally {
+            res.end();
+          }
+        } else {
+          res.end();
+        }
+      } else {
+        const data = await response.json();
+        res.json(data);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Notion AI service error';
+      res.status(503).json({
+        error: {
+          code: 'AI_SERVICE_UNAVAILABLE',
+          message,
+        },
+      });
+    }
+  }));
+
   router.get('/chunks', asyncHandler(async (_req, res) => {
     try {
       const { vault, index } = session.requireVault();

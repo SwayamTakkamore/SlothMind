@@ -1,4 +1,4 @@
-import { Check, Eye, EyeOff, FileText, Info, Save } from 'lucide-react';
+import { Check, Eye, EyeOff, FileText, Info, Save, Sparkles } from 'lucide-react';
 import type { SaveStatus } from '../../types';
 
 interface EditorHeaderProps {
@@ -7,6 +7,7 @@ interface EditorHeaderProps {
   preview: boolean;
   onTogglePreview: () => void;
   onSaveNow: () => void;
+  onOpenNotionAI?: () => void;
 }
 
 function cleanTitle(path: string | null): { folder: string | null; title: string } {
@@ -18,7 +19,14 @@ function cleanTitle(path: string | null): { folder: string | null; title: string
   return { folder, title };
 }
 
-export function EditorHeader({ path, saveStatus, preview, onTogglePreview, onSaveNow }: EditorHeaderProps) {
+export function EditorHeader({
+  path,
+  saveStatus,
+  preview,
+  onTogglePreview,
+  onSaveNow,
+  onOpenNotionAI,
+}: EditorHeaderProps) {
   const { folder, title } = cleanTitle(path);
 
   return (
@@ -56,6 +64,21 @@ export function EditorHeader({ path, saveStatus, preview, onTogglePreview, onSav
       </div>
 
       <div className="flex items-center gap-1.5">
+        {onOpenNotionAI && (
+          <button
+            onClick={onOpenNotionAI}
+            disabled={!path}
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600/15 to-indigo-600/15 border border-purple-500/30 px-2.5 py-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition disabled:opacity-40"
+            title="Open Notion AI workspace assistant (Ctrl+J)"
+          >
+            <Sparkles size={13} className="text-purple-500" />
+            <span>Notion AI</span>
+            <kbd className="hidden sm:inline rounded bg-purple-500/15 border border-purple-500/30 px-1 py-0.2 text-[9px] font-mono">
+              Ctrl+J
+            </kbd>
+          </button>
+        )}
+
         <button
           onClick={onSaveNow}
           disabled={!path || saveStatus === 'saving'}

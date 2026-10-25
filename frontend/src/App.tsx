@@ -10,6 +10,7 @@ import { VaultPicker } from './components/vault/VaultPicker';
 import { AIPanel } from './components/ai/AIPanel';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { ModelLibraryModal } from './components/models/ModelLibraryModal';
+import { NotionAIModal } from './components/notion/NotionAIModal';
 import { useVault } from './hooks/useVault';
 import { useAutosave } from './hooks/useAutosave';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -38,6 +39,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelLibraryOpen, setModelLibraryOpen] = useState(false);
+  const [notionModalOpen, setNotionModalOpen] = useState(false);
+  const [selectedTextForNotion, setSelectedTextForNotion] = useState('');
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [activeModelName, setActiveModelName] = useState<string | null>(null);
   const [treeKey, setTreeKey] = useState(0);
@@ -126,12 +129,33 @@ export default function App() {
     }
   }, [refreshTree, vault.hasVault]);
 
+  const handleOpenNotionAI = useCallback((selText?: string) => {
+    setSelectedTextForNotion(selText || '');
+    setNotionModalOpen(true);
+  }, []);
+
+  const handleInsertContent = useCallback(
+    (newText: string, mode: 'replace-selection' | 'insert-below' | 'replace-all' | 'append') => {
+      if (mode === 'replace-all') {
+        setContent(newText);
+      } else if (mode === 'replace-selection' && selectedTextForNotion) {
+        setContent((prev) => prev.replace(selectedTextForNotion, newText));
+      } else if (mode === 'insert-below' && selectedTextForNotion) {
+        setContent((prev) => prev.replace(selectedTextForNotion, `${selectedTextForNotion}\n\n${newText}`));
+      } else {
+        setContent((prev) => (prev ? `${prev}\n\n${newText}` : newText));
+      }
+    },
+    [selectedTextForNotion]
+  );
+
   useKeyboard({
     onSearch: () => setSearchOpen(true),
     onSave: () => void autosave.saveNow(),
     onNewNote: () => void createNote(),
     onSettings: () => setSettingsOpen((o) => !o),
     onToggleTheme: theme.toggleTheme,
+    onNotionAI: () => handleOpenNotionAI(),
   });
 
   const editor = (
@@ -142,13 +166,25 @@ export default function App() {
         preview={preview}
         onTogglePreview={() => setPreview((p) => !p)}
         onSaveNow={() => void autosave.saveNow()}
+        onOpenNotionAI={() => handleOpenNotionAI()}
       />
       <div className="flex-1 overflow-hidden">
         {activeNotePath ? (
           loadingNote ? (
-            <div className="flex h-full items-center justify-center text-sm text-sloth-subtle">Loading note...</div>
+            <div className="flex h-full items-center justify-center text-sm text-sloth-subtle">
+              Loading note...
+            </div>
           ) : (
-            <MarkdownEditor value={content} onChange={setContent} preview={preview} />
+            <MarkdownEditor
+              value={content}
+              onChange={setContent}
+              preview={preview}
+              onOpenNotionAI={(selText) => handleOpenNotionAI(selText)}
+              onQuickNotionAction={(action, selText) => {
+                handleOpenNotionAI(selText);
+                console.log('Triggered action', action);
+              }}
+            />
           )
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center p-6">
@@ -173,7 +209,10 @@ export default function App() {
     async (aiContent: string) => {
       if (!vault.hasVault) return;
       try {
-        const name = window.prompt('Save as note with name:', `AI Note ${new Date().toISOString().slice(0, 10)}`);
+        const name = window.prompt(
+          'Save as note with name:',
+          `AI Note ${new Date().toISOString().slice(0, 10)}`
+        );
         if (!name) return;
         const filename = name.endsWith('.md') ? name : `${name}.md`;
         await api.writeNote(filename, aiContent);
@@ -225,6 +264,7 @@ export default function App() {
             activeNoteContent={content}
             onSaveAsNote={saveAsNote}
             onOpenNote={(path) => setActiveNotePath(path)}
+            onInsertContent={handleInsertContent}
             onOpenModelLibrary={() => setModelLibraryOpen(true)}
             activeModelName={activeModelName}
           />
@@ -261,6 +301,15 @@ export default function App() {
         open={modelLibraryOpen}
         onClose={() => setModelLibraryOpen(false)}
         onModelChanged={(modelId) => setActiveModelName(modelId)}
+      />
+      <NotionAIModal
+        open={notionModalOpen}
+        onClose={() => setNotionModalOpen(false)}
+        selectedText={selectedTextForNotion}
+        activeNoteContent={content}
+        activeModelName={activeModelName}
+        onInsertContent={handleInsertContent}
+        onOpenModelLibrary={() => setModelLibraryOpen(true)}
       />
     </VaultContext.Provider>
   );
