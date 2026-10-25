@@ -116,7 +116,7 @@ button:hover .sloth-hover-hint {
   line-height: 1.7;
 }
 
-/* Notion-Style Multi-Level Lists in Preview */
+/* Hierarchical Multi-Level Lists in Preview */
 .prose-sloth ul,
 .prose-sloth ol {
   padding-left: 1.5rem;
@@ -254,7 +254,7 @@ button:hover .sloth-hover-hint {
   color: rgb(var(--sloth-text));
 }
 
-/* Notion-Style Multi-Level Numbered Lists in Editor */
+/* Hierarchical Multi-Level Numbered Lists in Editor */
 .tiptap ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
@@ -270,7 +270,7 @@ button:hover .sloth-hover-hint {
   list-style-type: decimal;
 }
 
-/* Notion-Style Multi-Level Bulleted Lists in Editor */
+/* Hierarchical Multi-Level Bulleted Lists in Editor */
 .tiptap ul:not([data-type="taskList"]) {
   list-style-type: disc;
   padding-left: 1.5rem;
@@ -384,7 +384,7 @@ button:hover .sloth-hover-hint {
   pointer-events: none;
 }
 
-/* Notion-Style Multi-Level Dynamic Task Lists (Checkboxes) */
+/* Hierarchical Multi-Level Dynamic Task Lists (Checkboxes) */
 .tiptap ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0.25rem;

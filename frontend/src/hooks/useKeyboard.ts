@@ -58,7 +58,7 @@ export function useKeyboard({
         return;
       }
 
-      // Ctrl + Shift + N: Open a new Notion window
+      // Ctrl + Shift + N: Open a new window
       if (mod && event.shiftKey && key === 'n') {
         event.preventDefault();
         if (onNewWindow) {
@@ -115,7 +115,7 @@ export function useKeyboard({
         return;
       }
 
-      // Ctrl + J: Ask Notion AI
+      // Ctrl + J: Ask Sloth AI
       if (mod && !event.shiftKey && key === 'j') {
         event.preventDefault();
         onNotionAI?.();

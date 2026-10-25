@@ -87,10 +87,10 @@ export function EditorHeader({
             onClick={onOpenNotionAI}
             disabled={!path}
             className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600/15 to-indigo-600/15 border border-purple-500/30 px-2.5 py-1 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition disabled:opacity-40"
-            title="Open Notion AI workspace assistant (Ctrl+J)"
+            title="Open Sloth AI workspace assistant (Ctrl+J)"
           >
             <Sparkles size={13} className="text-purple-500" />
-            <span>Notion AI</span>
+            <span>Sloth AI</span>
             <kbd className="hidden sm:inline rounded bg-purple-500/15 border border-purple-500/30 px-1 py-0.2 text-[9px] font-mono">
               Ctrl+J
             </kbd>

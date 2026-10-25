@@ -107,10 +107,10 @@ export function NotionAIModal({
         if (res.result) {
           setGeneratedResult(res.result);
         } else {
-          throw new Error('No content returned from Notion AI');
+          throw new Error('No content returned from Sloth AI');
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Notion AI generation failed';
+        const msg = err instanceof Error ? err.message : 'Sloth AI generation failed';
         setErrorMsg(msg);
       } finally {
         setIsGenerating(false);
@@ -153,7 +153,7 @@ export function NotionAIModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-sloth-text">Notion AI</span>
+                <span className="text-sm font-bold text-sloth-text">Sloth AI</span>
                 <span className="rounded-full bg-purple-500/15 px-2 py-0.2 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
                   Universal Workspace AI
                 </span>
@@ -190,7 +190,7 @@ export function NotionAIModal({
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-sloth-subtle transition hover:bg-sloth-surface hover:text-sloth-text"
-            title="Close Notion AI"
+            title="Close Sloth AI"
           >
             <X size={16} />
           </button>
@@ -207,8 +207,8 @@ export function NotionAIModal({
               onChange={(e) => setCustomPrompt(e.target.value)}
               placeholder={
                 hasSelection
-                  ? 'Ask Notion AI to edit or rewrite selection... (e.g. "turn into bullet points", "more concise")'
-                  : 'Ask Notion AI to write, brainstorm, or outline anything...'
+                  ? 'Ask Sloth AI to edit or rewrite selection... (e.g. "turn into bullet points", "more concise")'
+                  : 'Ask Sloth AI to write, brainstorm, or outline anything...'
               }
               disabled={isGenerating}
               className="w-full rounded-xl border border-sloth-border bg-sloth-panel py-2 pl-9 pr-24 text-xs text-sloth-text placeholder:text-sloth-subtle focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 outline-none"
@@ -236,7 +236,7 @@ export function NotionAIModal({
           </div>
         )}
 
-        {/* Content Area: Generated Output OR Notion AI Command Palette */}
+        {/* Content Area: Generated Output OR Sloth AI Command Palette */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {isGenerating ? (
             <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
@@ -244,7 +244,7 @@ export function NotionAIModal({
                 <Sparkles size={24} className="animate-spin duration-1000" />
               </div>
               <div>
-                <p className="text-sm font-bold text-sloth-text">Notion AI is generating...</p>
+                <p className="text-sm font-bold text-sloth-text">Sloth AI is generating...</p>
                 <p className="text-xs text-sloth-subtle mt-0.5">
                   Running {activeTask || 'task'} locally on your RTX 3050 GPU
                 </p>
@@ -256,7 +256,7 @@ export function NotionAIModal({
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400">
                   <Wand2 size={13} />
-                  <span>Notion AI Response</span>
+                  <span>Sloth AI Response</span>
                 </span>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -284,7 +284,7 @@ export function NotionAIModal({
                 </article>
               </div>
 
-              {/* Notion-Style Action Decision Buttons */}
+              {/* Action Decision Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-sloth-border">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {hasSelection ? (
@@ -341,13 +341,13 @@ export function NotionAIModal({
               </div>
             </div>
           ) : (
-            /* Notion AI Command Categories */
+            /* Sloth AI Command Categories */
             <div className="space-y-4">
               {/* Category 1: Generation & First Drafts */}
               <div>
                 <p className="text-[11px] font-bold text-sloth-subtle uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <PenTool size={12} className="text-purple-500" />
-                  <span>Draft with Notion AI</span>
+                  <span>Draft with Sloth AI</span>
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <button

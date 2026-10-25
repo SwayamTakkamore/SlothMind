@@ -18,10 +18,10 @@ export function NotionAIFloatingToolbar({
       <button
         onClick={onAskAI}
         className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-2.5 py-1 text-xs font-bold text-white shadow-sm transition hover:opacity-90"
-        title="Open full Notion AI palette (Ctrl+J)"
+        title="Open full Sloth AI palette (Ctrl+J)"
       >
         <Sparkles size={13} />
-        <span>Ask Notion AI</span>
+        <span>Ask Sloth AI</span>
       </button>
 
       <div className="h-4 w-px bg-sloth-border mx-0.5" />

@@ -178,7 +178,7 @@ describe('MarkdownEditor Component', () => {
     expect(screen.queryByTitle(/Heading 1/i)).toBeNull();
   });
 
-  it('supports raw mode Notion shortcuts: duplicate, toggle checkbox, and code formatting', async () => {
+  it('supports raw mode shortcuts: duplicate, toggle checkbox, and code formatting', async () => {
     const handleChange = vi.fn();
     await act(async () => {
       render(
@@ -214,7 +214,7 @@ describe('MarkdownEditor Component', () => {
     expect(handleChange).toHaveBeenCalledWith('- [ ] Task item to toggle\n- [ ] Task item to toggle');
   });
 
-  it('Notion lists: Tab indents and nests, Shift+Tab outdents, and numbered lists reset sub-level to 1', () => {
+  it('Hierarchical lists: Tab indents and nests, Shift+Tab outdents, and numbered lists reset sub-level to 1', () => {
     // Numbered list indent / nest
     expect(indentMarkdownLine('2. Sub item')).toBe('  1. Sub item');
     expect(indentMarkdownLine('  3. Deep nested')).toBe('    1. Deep nested');
@@ -233,7 +233,7 @@ describe('MarkdownEditor Component', () => {
     expect(outdentMarkdownLine('    - [ ] Task')).toBe('  - [ ] Task');
   });
 
-  it('Notion lists: pressing Enter in textarea continues the list, and Tab indents numbered item', async () => {
+  it('Hierarchical lists: pressing Enter in textarea continues the list, and Tab indents numbered item', async () => {
     const handleChange = vi.fn();
     const { unmount } = render(
       <MarkdownEditor
@@ -283,7 +283,7 @@ describe('MarkdownEditor Component', () => {
     expect(handleTabChange).toHaveBeenCalledWith('  1. Second item');
   });
 
-  it('renders slash command suggestions menu with all Notion commands', async () => {
+  it('renders slash command suggestions menu with all editor commands', async () => {
     const handleSelect = vi.fn();
     await act(async () => {
       render(
@@ -297,8 +297,8 @@ describe('MarkdownEditor Component', () => {
       );
     });
 
-    // All core Notion commands should be available
-    expect(screen.getByText('Ask Notion AI')).toBeDefined();
+    // All core commands should be available
+    expect(screen.getByText('Ask Sloth AI')).toBeDefined();
     expect(screen.getByText('Heading 1')).toBeDefined();
     expect(screen.getByText('Heading 2')).toBeDefined();
     expect(screen.getByText('Heading 3')).toBeDefined();

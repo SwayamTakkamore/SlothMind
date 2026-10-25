@@ -43,12 +43,12 @@ export interface CommandItem {
 export const SLASH_COMMANDS: CommandItem[] = [
   {
     id: 'ai',
-    title: 'Ask Notion AI',
+    title: 'Ask Sloth AI',
     description: 'Ask AI to write, summarize, brainstorm, or outline',
     badge: 'Ctrl+J',
     category: 'AI',
     icon: <Sparkles size={16} className="text-purple-500" />,
-    keywords: ['ai', 'notion', 'ask', 'generate', 'write', 'prompt'],
+    keywords: ['ai', 'sloth', 'ask', 'generate', 'write', 'prompt'],
   },
   {
     id: 'h1',
@@ -400,7 +400,7 @@ export function SlashCommandMenu({
       className="fixed z-50 w-84 max-h-88 overflow-y-auto rounded-xl border border-sloth-border bg-sloth-panel/95 p-1.5 shadow-2xl backdrop-blur-md select-none text-xs animate-in fade-in zoom-in-95 duration-100"
     >
       <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sloth-subtle flex items-center justify-between border-b border-sloth-border/50 mb-1">
-        <span>Notion Commands</span>
+        <span>Commands</span>
         {query ? (
           <span className="text-sloth-accent lowercase font-mono">/{query}</span>
         ) : (

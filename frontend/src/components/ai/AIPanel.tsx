@@ -116,7 +116,7 @@ export function AIPanel({
       const targetText = activeNoteContent.trim();
       const userMsg: Message = {
         role: 'user',
-        content: options?.prompt ? `Notion AI [${label}]: ${options.prompt}` : `Notion AI: ${label}`,
+        content: options?.prompt ? `Sloth AI [${label}]: ${options.prompt}` : `Sloth AI: ${label}`,
       };
 
       setMessages((prev) => [...prev, userMsg]);
@@ -144,7 +144,7 @@ export function AIPanel({
           ]);
         }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Notion AI generation failed';
+        const msg = err instanceof Error ? err.message : 'Sloth AI generation failed';
         setMessages((prev) => [
           ...prev,
           {
@@ -331,7 +331,7 @@ export function AIPanel({
           <div className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-tr from-purple-600 to-indigo-500 text-white">
             <Sparkles size={12} />
           </div>
-          <span className="text-xs font-semibold text-sloth-text">Notion & Local AI</span>
+          <span className="text-xs font-semibold text-sloth-text">Sloth & Local AI</span>
           <button
             onClick={onOpenModelLibrary}
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition cursor-pointer ${
@@ -362,10 +362,10 @@ export function AIPanel({
               ? 'bg-sloth-panel text-sloth-text shadow-sm border border-sloth-border/50 font-bold'
               : 'text-sloth-subtle hover:text-sloth-text'
           }`}
-          title="Notion AI writing, editing, and task automation suite"
+          title="Sloth AI writing, editing, and task automation suite"
         >
           <Sparkles size={12} className={mode === 'notion' ? 'text-purple-500' : ''} />
-          Notion AI
+          Sloth AI
         </button>
         <button
           onClick={() => setMode('rag')}
@@ -393,11 +393,11 @@ export function AIPanel({
         </button>
       </div>
 
-      {/* Notion AI Quick Actions Ribbon (Only when Notion AI tab is active) */}
+      {/* Sloth AI Quick Actions Ribbon (Only when Notion AI tab is active) */}
       {mode === 'notion' && (
         <div className="border-b border-sloth-border bg-sloth-surface/20 p-2 space-y-1.5">
           <p className="text-[10px] font-bold text-sloth-subtle uppercase tracking-wider">
-            1-Click Notion Actions:
+            1-Click AI Actions:
           </p>
           <div className="grid grid-cols-3 gap-1">
             <button
@@ -507,7 +507,7 @@ export function AIPanel({
 
       {/* Action Bar for clear / status */}
       <div className="flex items-center justify-between border-b border-sloth-border px-3 py-1 text-[11px] text-sloth-subtle">
-        <span>{mode === 'notion' ? 'Notion AI Studio' : mode === 'rag' ? 'Vault Q&A' : 'Chat'}</span>
+        <span>{mode === 'notion' ? 'Sloth AI Studio' : mode === 'rag' ? 'Vault Q&A' : 'Chat'}</span>
         <button
           onClick={clearChat}
           className="flex items-center gap-1 rounded p-1 hover:text-sloth-text transition"
@@ -548,7 +548,7 @@ export function AIPanel({
             </div>
             <p className="text-xs font-bold text-sloth-text mt-1">
               {mode === 'notion'
-                ? 'Notion AI Workspace'
+                ? 'Sloth AI Workspace'
                 : mode === 'rag'
                 ? 'Ask Your Vault'
                 : 'Local AI Chat'}

@@ -259,7 +259,7 @@ const DynamicMarkdownRules = Extension.create({
   },
 });
 
-// Indent a markdown line (Notion-style list nesting & block indentation)
+// Indent a markdown line (Multi-level list nesting & block indentation)
 export function indentMarkdownLine(line: string): string {
   const m = line.match(/^(\s*)(?:(\d+)\.\s|(- \[[ xX]\]\s)|([*+-]\s))(.*)$/);
   if (!m) {
@@ -282,7 +282,7 @@ export function indentMarkdownLine(line: string): string {
   return '  ' + line;
 }
 
-// Outdent a markdown line (Notion-style list un-nesting)
+// Outdent a markdown line (Multi-level list un-nesting)
 export function outdentMarkdownLine(line: string): string {
   if (line.startsWith('  ')) {
     return line.slice(2);
@@ -711,7 +711,7 @@ export function MarkdownEditor({
       }),
       DynamicMarkdownRules,
       Placeholder.configure({
-        placeholder: "Type '/' for commands, '#' for Heading, '---' for Divider, or Ctrl+J for Notion AI...",
+        placeholder: "Type '/' for commands, '#' for Heading, '---' for Divider, or Ctrl+J for Sloth AI...",
         emptyEditorClass: 'is-editor-empty',
       }),
       Markdown.configure({
@@ -897,7 +897,7 @@ export function MarkdownEditor({
           return true;
         }
 
-        // Tab and Shift+Tab: Notion-style indent / nest / outdent blocks
+        // Tab and Shift+Tab: Multi-level indent / nest / outdent blocks
         if (event.key === 'Tab' && editor) {
           event.preventDefault();
           if (editor.isActive('table')) {
@@ -932,7 +932,7 @@ export function MarkdownEditor({
           return true;
         }
 
-        // Ctrl+J or Cmd+J opens Notion AI with selection
+        // Ctrl+J or Cmd+J opens Sloth AI with selection
         if ((event.ctrlKey || event.metaKey) && (event.key === 'j' || event.key === 'J')) {
           event.preventDefault();
           onOpenNotionAI?.(selectedText);
@@ -1155,7 +1155,7 @@ export function MarkdownEditor({
       return;
     }
 
-    // Tab and Shift+Tab: Notion-style list nesting & block indent/outdent
+    // Tab and Shift+Tab: Multi-level list nesting & block indent/outdent
     if (e.key === 'Tab') {
       e.preventDefault();
       const target = e.currentTarget;
@@ -1216,7 +1216,7 @@ export function MarkdownEditor({
       return;
     }
 
-    // Enter key: Notion-style smart list auto-continuation or empty item outdent/exit
+    // Enter key: Multi-level smart list auto-continuation or empty item outdent/exit
     if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'Enter') {
       const target = e.currentTarget;
       const start = target.selectionStart;
@@ -1399,7 +1399,7 @@ export function MarkdownEditor({
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden bg-transparent">
-      {/* Floating Notion AI toolbar on text selection */}
+      {/* Floating Sloth AI toolbar on text selection */}
       <NotionAIFloatingToolbar
         visible={selectedText.trim().length > 0}
         onAskAI={() => onOpenNotionAI?.(selectedText)}
@@ -1796,11 +1796,11 @@ export function MarkdownEditor({
             </div>
           )}
 
-          {/* Notion AI summon pill */}
+          {/* Sloth AI summon pill */}
           <button
             onClick={() => onOpenNotionAI?.(selectedText)}
             className="flex items-center gap-1 rounded-lg bg-purple-500/10 border border-purple-500/25 px-2 py-0.5 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition"
-            title="Ask Notion AI (Ctrl+J or type '/ai')"
+            title="Ask Sloth AI (Ctrl+J or type '/ai')"
           >
             <Sparkles size={11} />
             <span>AI</span>
@@ -1864,7 +1864,7 @@ export function MarkdownEditor({
                   onKeyDown={handleTextareaKeyDown}
                   spellCheck={false}
                   className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-                  placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
+                  placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Sloth AI)"
                 />
               )}
             </div>
@@ -1914,7 +1914,7 @@ export function MarkdownEditor({
                     onKeyDown={handleTextareaKeyDown}
                     spellCheck={false}
                     className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
-                    placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Notion AI)"
+                    placeholder="# Start writing in Markdown... (Type '/' for commands or Ctrl+J for Sloth AI)"
                   />
                 )}
               </div>
