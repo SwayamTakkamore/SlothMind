@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { MarkdownEditor } from '../src/components/editor/MarkdownEditor';
+import { MarkdownEditor, indentMarkdownLine, outdentMarkdownLine } from '../src/components/editor/MarkdownEditor';
 import { SlashCommandMenu } from '../src/components/editor/SlashCommandMenu';
 
 describe('MarkdownEditor Component', () => {
@@ -212,6 +212,75 @@ describe('MarkdownEditor Component', () => {
     });
 
     expect(handleChange).toHaveBeenCalledWith('- [ ] Task item to toggle\n- [ ] Task item to toggle');
+  });
+
+  it('Notion lists: Tab indents and nests, Shift+Tab outdents, and numbered lists reset sub-level to 1', () => {
+    // Numbered list indent / nest
+    expect(indentMarkdownLine('2. Sub item')).toBe('  1. Sub item');
+    expect(indentMarkdownLine('  3. Deep nested')).toBe('    1. Deep nested');
+
+    // Bulleted list indent / nest
+    expect(indentMarkdownLine('- Bullet point')).toBe('  - Bullet point');
+    expect(indentMarkdownLine('  * Nested star')).toBe('    * Nested star');
+
+    // To-Do list indent / nest
+    expect(indentMarkdownLine('- [ ] Buy groceries')).toBe('  - [ ] Buy groceries');
+    expect(indentMarkdownLine('  - [x] Done task')).toBe('    - [x] Done task');
+
+    // Outdent
+    expect(outdentMarkdownLine('  1. Sub item')).toBe('1. Sub item');
+    expect(outdentMarkdownLine('  - Bullet point')).toBe('- Bullet point');
+    expect(outdentMarkdownLine('    - [ ] Task')).toBe('  - [ ] Task');
+  });
+
+  it('Notion lists: pressing Enter in textarea continues the list, and Tab indents numbered item', async () => {
+    const handleChange = vi.fn();
+    const { unmount } = render(
+      <MarkdownEditor
+        value="1. First item"
+        onChange={handleChange}
+        preview={false}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Raw Markdown Source/i));
+    });
+
+    const textarea = screen.getByPlaceholderText(/Start writing in Markdown/i) as HTMLTextAreaElement;
+    textarea.selectionStart = 13;
+    textarea.selectionEnd = 13;
+
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+    });
+
+    expect(handleChange).toHaveBeenCalledWith('1. First item\n2. ');
+
+    unmount();
+
+    const handleTabChange = vi.fn();
+    render(
+      <MarkdownEditor
+        value="2. Second item"
+        onChange={handleTabChange}
+        preview={false}
+      />
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle(/Raw Markdown Source/i));
+    });
+
+    const activeTextarea = screen.getByPlaceholderText(/Start writing in Markdown/i) as HTMLTextAreaElement;
+    activeTextarea.selectionStart = 2;
+    activeTextarea.selectionEnd = 2;
+
+    await act(async () => {
+      fireEvent.keyDown(activeTextarea, { key: 'Tab' });
+    });
+
+    expect(handleTabChange).toHaveBeenCalledWith('  1. Second item');
   });
 
   it('renders slash command suggestions menu with all Notion commands', async () => {

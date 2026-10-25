@@ -116,6 +116,7 @@ button:hover .sloth-hover-hint {
   line-height: 1.7;
 }
 
+/* Notion-Style Multi-Level Lists in Preview */
 .prose-sloth ul,
 .prose-sloth ol {
   padding-left: 1.5rem;
@@ -123,12 +124,41 @@ button:hover .sloth-hover-hint {
   margin-bottom: 0.5rem;
 }
 
-.prose-sloth ul {
+/* Multi-level Numbered List */
+.prose-sloth ol {
+  list-style-type: decimal;
+}
+.prose-sloth ol ol {
+  list-style-type: lower-alpha;
+}
+.prose-sloth ol ol ol {
+  list-style-type: lower-roman;
+}
+.prose-sloth ol ol ol ol {
+  list-style-type: decimal;
+}
+
+/* Multi-level Bulleted List */
+.prose-sloth ul:not(.contains-task-list) {
+  list-style-type: disc;
+}
+.prose-sloth ul:not(.contains-task-list) ul {
+  list-style-type: circle;
+}
+.prose-sloth ul:not(.contains-task-list) ul ul {
+  list-style-type: square;
+}
+.prose-sloth ul:not(.contains-task-list) ul ul ul {
   list-style-type: disc;
 }
 
-.prose-sloth ol {
-  list-style-type: decimal;
+/* Task lists in preview */
+.prose-sloth ul.contains-task-list {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.prose-sloth ul.contains-task-list ul.contains-task-list {
+  padding-left: 1.5rem;
 }
 
 .prose-sloth li {
@@ -224,16 +254,36 @@ button:hover .sloth-hover-hint {
   color: rgb(var(--sloth-text));
 }
 
-.tiptap ul {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin: 0.5rem 0;
-}
-
+/* Notion-Style Multi-Level Numbered Lists in Editor */
 .tiptap ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
   margin: 0.5rem 0;
+}
+.tiptap ol ol {
+  list-style-type: lower-alpha; /* a., b., c. */
+}
+.tiptap ol ol ol {
+  list-style-type: lower-roman; /* i., ii., iii. */
+}
+.tiptap ol ol ol ol {
+  list-style-type: decimal;
+}
+
+/* Notion-Style Multi-Level Bulleted Lists in Editor */
+.tiptap ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.tiptap ul:not([data-type="taskList"]) ul {
+  list-style-type: circle;
+}
+.tiptap ul:not([data-type="taskList"]) ul ul {
+  list-style-type: square;
+}
+.tiptap ul:not([data-type="taskList"]) ul ul ul {
+  list-style-type: disc;
 }
 
 .tiptap li {
@@ -334,11 +384,16 @@ button:hover .sloth-hover-hint {
   pointer-events: none;
 }
 
-/* Dynamic Task Lists (Checkboxes) */
+/* Notion-Style Multi-Level Dynamic Task Lists (Checkboxes) */
 .tiptap ul[data-type="taskList"] {
   list-style: none;
-  padding: 0;
+  padding-left: 0.25rem;
   margin: 0.5rem 0;
+}
+
+.tiptap ul[data-type="taskList"] ul[data-type="taskList"] {
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
 }
 
 .tiptap ul[data-type="taskList"] li {

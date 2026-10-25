@@ -269,6 +269,40 @@ const DynamicMarkdownRules = Extension.create({
   },
 });
 
+// Indent a markdown line (Notion-style list nesting & block indentation)
+export function indentMarkdownLine(line: string): string {
+  const m = line.match(/^(\s*)(?:(\d+)\.\s|(- \[[ xX]\]\s)|([*+-]\s))(.*)$/);
+  if (!m) {
+    return '  ' + line;
+  }
+  const currentIndent = m[1];
+  const isNum = m[2] !== undefined;
+  const isTask = m[3] !== undefined;
+  const isBullet = m[4] !== undefined;
+  const text = m[5];
+
+  if (isNum) {
+    // When nesting a numbered list item, reset sub-level to 1.
+    return '  ' + currentIndent + '1. ' + text;
+  } else if (isTask) {
+    return '  ' + currentIndent + m[3] + text;
+  } else if (isBullet) {
+    return '  ' + currentIndent + m[4] + text;
+  }
+  return '  ' + line;
+}
+
+// Outdent a markdown line (Notion-style list un-nesting)
+export function outdentMarkdownLine(line: string): string {
+  if (line.startsWith('  ')) {
+    return line.slice(2);
+  }
+  if (line.startsWith('\t') || line.startsWith(' ')) {
+    return line.slice(1);
+  }
+  return line;
+}
+
 export function MarkdownEditor({
   value,
   onChange,
@@ -873,25 +907,37 @@ export function MarkdownEditor({
           return true;
         }
 
-        // Tab and Shift+Tab: Indent / nest / outdent blocks
+        // Tab and Shift+Tab: Notion-style indent / nest / outdent blocks
         if (event.key === 'Tab' && editor) {
           event.preventDefault();
-          if (event.shiftKey) {
-            if (editor.isActive('taskItem')) {
-              editor.commands.liftListItem('taskItem');
-            } else if (editor.isActive('listItem')) {
-              editor.commands.liftListItem('listItem');
-            } else if (editor.isActive('table')) {
+          if (editor.isActive('table')) {
+            if (event.shiftKey) {
               editor.commands.goToPreviousCell();
-            }
-          } else {
-            if (editor.isActive('taskItem')) {
-              editor.commands.sinkListItem('taskItem');
-            } else if (editor.isActive('listItem')) {
-              editor.commands.sinkListItem('listItem');
-            } else if (editor.isActive('table')) {
+            } else {
               editor.commands.goToNextCell();
             }
+            return true;
+          }
+
+          if (event.shiftKey) {
+            // Outdent (un-nest) list items
+            const lifted =
+              editor.chain().focus().liftListItem('taskItem').run() ||
+              editor.chain().focus().liftListItem('listItem').run();
+            if (lifted) return true;
+          } else {
+            // Indent (nest) list items under previous item
+            const isInsideList = editor.isActive('taskItem') || editor.isActive('listItem');
+            if (isInsideList) {
+              const sunk =
+                editor.chain().focus().sinkListItem('taskItem').run() ||
+                editor.chain().focus().sinkListItem('listItem').run();
+              if (sunk) return true;
+              return true;
+            }
+
+            editor.chain().focus().insertContent('  ').run();
+            return true;
           }
           return true;
         }
@@ -1144,29 +1190,157 @@ export function MarkdownEditor({
       return;
     }
 
-    // Tab and Shift+Tab indent/outdent
+    // Tab and Shift+Tab: Notion-style list nesting & block indent/outdent
     if (e.key === 'Tab') {
       e.preventDefault();
       const target = e.currentTarget;
       const start = target.selectionStart;
       const end = target.selectionEnd;
-      if (e.shiftKey) {
+
+      if (start === end) {
+        // Single line indent/outdent
         const lineStart = target.value.lastIndexOf('\n', start - 1) + 1;
-        if (target.value.slice(lineStart, lineStart + 2) === '  ') {
-          const next = target.value.slice(0, lineStart) + target.value.slice(lineStart + 2);
-          onChange(next);
+        const lineEndIdx = target.value.indexOf('\n', start);
+        const lineEnd = lineEndIdx === -1 ? target.value.length : lineEndIdx;
+        const line = target.value.slice(lineStart, lineEnd);
+
+        if (e.shiftKey) {
+          const outdented = outdentMarkdownLine(line);
+          const diff = line.length - outdented.length;
+          const nextVal = target.value.slice(0, lineStart) + outdented + target.value.slice(lineEnd);
+          onChange(nextVal);
           setTimeout(() => {
-            target.setSelectionRange(Math.max(lineStart, start - 2), Math.max(lineStart, end - 2));
+            target.setSelectionRange(Math.max(lineStart, start - diff), Math.max(lineStart, end - diff));
+          }, 10);
+        } else {
+          const indented = indentMarkdownLine(line);
+          const diff = indented.length - line.length;
+          const nextVal = target.value.slice(0, lineStart) + indented + target.value.slice(lineEnd);
+          onChange(nextVal);
+          setTimeout(() => {
+            target.setSelectionRange(start + diff, end + diff);
           }, 10);
         }
       } else {
-        const next = target.value.slice(0, start) + '  ' + target.value.slice(end);
-        onChange(next);
+        // Multi-line selection indent/outdent
+        const selStartLine = target.value.lastIndexOf('\n', start - 1) + 1;
+        const selEndIdx = target.value.indexOf('\n', end);
+        const selEndLine = selEndIdx === -1 ? target.value.length : selEndIdx;
+        const selectedBlock = target.value.slice(selStartLine, selEndLine);
+        const lines = selectedBlock.split('\n');
+
+        let diffTotal = 0;
+        const processedLines = lines.map((l) => {
+          if (e.shiftKey) {
+            const out = outdentMarkdownLine(l);
+            diffTotal -= (l.length - out.length);
+            return out;
+          } else {
+            const ind = indentMarkdownLine(l);
+            diffTotal += (ind.length - l.length);
+            return ind;
+          }
+        });
+
+        const nextVal = target.value.slice(0, selStartLine) + processedLines.join('\n') + target.value.slice(selEndLine);
+        onChange(nextVal);
         setTimeout(() => {
-          target.setSelectionRange(start + 2, start + 2);
+          target.setSelectionRange(selStartLine, Math.max(selStartLine, end + diffTotal));
         }, 10);
       }
       return;
+    }
+
+    // Enter key: Notion-style smart list auto-continuation or empty item outdent/exit
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'Enter') {
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const lineStart = target.value.lastIndexOf('\n', start - 1) + 1;
+      const currentLine = target.value.slice(lineStart, start);
+
+      const match = currentLine.match(/^(\s*)(?:(\d+)\.\s|(- \[[ xX]\]\s)|([*+-]\s))(.*)$/);
+      if (match) {
+        const indent = match[1];
+        const num = match[2];
+        const task = match[3];
+        const bullet = match[4];
+        const contentAfterMarker = match[5];
+
+        // Empty list item: Enter outdents or exits list
+        if (contentAfterMarker.trim() === '') {
+          e.preventDefault();
+          if (indent.length >= 2) {
+            const outdentedIndent = indent.slice(2);
+            const marker = num !== undefined ? `${num}. ` : task !== undefined ? task : bullet;
+            const nextVal = target.value.slice(0, lineStart) + outdentedIndent + marker + target.value.slice(start);
+            onChange(nextVal);
+            setTimeout(() => {
+              const newPos = lineStart + outdentedIndent.length + marker.length;
+              target.setSelectionRange(newPos, newPos);
+            }, 10);
+          } else {
+            // Exit list on empty item
+            const nextVal = target.value.slice(0, lineStart) + target.value.slice(start);
+            onChange(nextVal);
+            setTimeout(() => {
+              target.setSelectionRange(lineStart, lineStart);
+            }, 10);
+          }
+          return;
+        }
+
+        // List item has content: continue list on next line
+        e.preventDefault();
+        let nextMarker = '';
+        if (num !== undefined) {
+          nextMarker = `${indent}${parseInt(num, 10) + 1}. `;
+        } else if (task !== undefined) {
+          nextMarker = `${indent}- [ ] `;
+        } else if (bullet !== undefined) {
+          nextMarker = `${indent}${bullet}`;
+        }
+
+        const nextVal = target.value.slice(0, start) + '\n' + nextMarker + target.value.slice(start);
+        onChange(nextVal);
+        setTimeout(() => {
+          const nextPos = start + 1 + nextMarker.length;
+          target.setSelectionRange(nextPos, nextPos);
+        }, 10);
+        return;
+      }
+    }
+
+    // Backspace on empty list marker: outdent or exit
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === 'Backspace') {
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      if (start === end) {
+        const lineStart = target.value.lastIndexOf('\n', start - 1) + 1;
+        const currentLine = target.value.slice(lineStart, start);
+        const match = currentLine.match(/^(\s*)(?:(\d+)\.\s|(- \[[ xX]\]\s)|([*+-]\s))$/);
+        if (match) {
+          e.preventDefault();
+          const indent = match[1];
+          const marker = match[2] ? `${match[2]}. ` : match[3] || match[4];
+          if (indent.length >= 2) {
+            const outdentedIndent = indent.slice(2);
+            const nextVal = target.value.slice(0, lineStart) + outdentedIndent + marker + target.value.slice(start);
+            onChange(nextVal);
+            setTimeout(() => {
+              const newPos = lineStart + outdentedIndent.length + marker.length;
+              target.setSelectionRange(newPos, newPos);
+            }, 10);
+          } else {
+            const nextVal = target.value.slice(0, lineStart) + target.value.slice(start);
+            onChange(nextVal);
+            setTimeout(() => {
+              target.setSelectionRange(lineStart, lineStart);
+            }, 10);
+          }
+          return;
+        }
+      }
     }
 
     // Ctrl+E: Inline code
