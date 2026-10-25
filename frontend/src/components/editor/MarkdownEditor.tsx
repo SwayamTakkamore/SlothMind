@@ -770,7 +770,7 @@ export function MarkdownEditor({
       {/* Editor Body */}
       {effectiveViewMode === 'split' ? (
         /* Split View: Side-by-side (Left: Editor, Right: Live Rendered Preview) */
-        <div className="flex-1 flex overflow-hidden divide-x divide-sloth-border">
+        <div className="flex-1 min-h-0 flex overflow-hidden divide-x divide-sloth-border">
           {/* Left half: Editor */}
           <div className="flex-1 h-full overflow-y-auto">
             {editorMode === 'dynamic' ? (
@@ -790,7 +790,7 @@ export function MarkdownEditor({
                 onMouseUp={handleTextareaSelect}
                 onKeyDown={handleTextareaKeyDown}
                 spellCheck={false}
-                className="h-full w-full min-h-[500px] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
+                className="h-full w-full min-h-[calc(100vh-200px)] resize-none bg-transparent px-8 py-6 font-mono text-sm leading-7 text-sloth-text outline-none placeholder:text-sloth-subtle"
                 placeholder="# Start writing in Markdown... (Type /ai or press Ctrl+J for Notion AI)"
               />
             )}
@@ -811,7 +811,7 @@ export function MarkdownEditor({
         </div>
       ) : (
         /* Full Single Editor: Centered or Full-width layout */
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div
             className={`min-h-full w-full cursor-text ${
               widthMode === 'centered' ? 'flex justify-center' : ''
