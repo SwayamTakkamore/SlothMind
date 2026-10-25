@@ -98,4 +98,11 @@ describe('Sloth AI Chatbot Intent Recognition', () => {
     expect(resGuide.task).toBe('draft');
     expect(resGuide.badge).toContain('Draft');
   });
+
+  it('recognizes continue and keep going intents', () => {
+    expect(recognizeIntent('continue').task).toBe('continue');
+    expect(recognizeIntent('continue writing').task).toBe('continue');
+    expect(recognizeIntent('keep going').task).toBe('continue');
+    expect(recognizeIntent('proceed').task).toBe('continue');
+  });
 });

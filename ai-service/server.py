@@ -949,6 +949,8 @@ Provide a concise, friendly response acknowledging "{prompt}" and reconfirm what
 {text}"""
 
     elif task in ("continue", "continue_writing"):
+        if not text and prompt:
+            return f"""Continue writing seamlessly about: {prompt}, expanding the thoughts with rich detail and clear Markdown formatting."""
         return f"""Continue writing seamlessly from the end of the following text, matching its voice, style, and flow:
 
 {text}"""

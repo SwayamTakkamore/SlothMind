@@ -6,6 +6,7 @@ import {
   Check,
   Copy,
   FileText,
+  Play,
   RefreshCw,
   RotateCcw,
   Sparkles,
@@ -78,7 +79,19 @@ export function recognizeIntent(rawPrompt: string, selectedText?: string): Recog
     };
   }
 
-  // 2. Action items / Checklists / Tasks
+  // 2. Continue / Keep going
+  if (
+    /^(?:continue(?:\s+writing)?|keep\s+going|go\s+on|proceed)$/i.test(cleanLower) ||
+    /^(?:continue|keep\s+going)\b/i.test(lower)
+  ) {
+    return {
+      task: 'continue',
+      prompt: p,
+      badge: '▶️ Continue',
+    };
+  }
+
+  // 3. Action items / Checklists / Tasks
   if (/(?:action\s*items?|tasks?|to-?dos?|checklist|extract\s*tasks)/i.test(lower)) {
     return {
       task: 'action-items',
@@ -303,8 +316,10 @@ export function NotionAIModal({
   const [useSelectionContext, setUseSelectionContext] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [bottomPrompt, setBottomPrompt] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const bottomInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const hasSelection = Boolean(selectedText && selectedText.trim().length > 0);
@@ -322,6 +337,13 @@ export function NotionAIModal({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isGenerating]);
+
+  // Focus bottom follow-up input when generation completes
+  useEffect(() => {
+    if (!isGenerating && messages.length > 0) {
+      setTimeout(() => bottomInputRef.current?.focus(), 50);
+    }
+  }, [isGenerating, messages.length]);
 
   const handleSendMessage = useCallback(
     async (overridePrompt?: string) => {
@@ -389,6 +411,66 @@ export function NotionAIModal({
       }
     },
     [inputPrompt, activeModelName, useSelectionContext, hasSelection, selectedText, activeNoteContent, messages]
+  );
+
+  const handleContinue = useCallback(
+    async (lastContent?: string) => {
+      if (!activeModelName) {
+        setErrorMsg('No local AI model is active. Please open the Model Library to activate a model.');
+        return;
+      }
+
+      const activeText = useSelectionContext && hasSelection ? selectedText.trim() : activeNoteContent.trim();
+      const targetText = lastContent || activeText || 'Continue';
+
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: 'Continue',
+        intentBadge: '▶️ Continue',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+
+      setMessages((prev) => [...prev, userMsg]);
+      setIsGenerating(true);
+      setErrorMsg(null);
+
+      try {
+        const res = await api.notionAI({
+          task: 'continue',
+          text: targetText,
+          prompt: 'Continue writing seamlessly from where you left off',
+          max_tokens: 768,
+          messages: [
+            ...messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            { role: 'user', content: 'Continue' },
+          ],
+        });
+
+        if (res.result) {
+          const assistantMsg: ChatMessage = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: res.result,
+            intentBadge: '▶️ Continue',
+            task: 'continue',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        } else {
+          throw new Error('No content returned from Sloth AI');
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Generation failed';
+        setErrorMsg(msg);
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [activeModelName, useSelectionContext, hasSelection, selectedText, activeNoteContent, messages]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -679,6 +761,16 @@ export function NotionAIModal({
                                 <ArrowRight size={11} />
                                 <span>Insert Below</span>
                               </button>
+
+                              <button
+                                onClick={() => handleContinue(msg.content)}
+                                disabled={isGenerating}
+                                className="flex items-center gap-1 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2 py-1 text-xs font-semibold text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 transition cursor-pointer disabled:opacity-40"
+                                title="Continue writing from here"
+                              >
+                                <Play size={10} className="fill-current text-purple-500" />
+                                <span>Continue</span>
+                              </button>
                             </div>
 
                             <button
@@ -715,6 +807,81 @@ export function NotionAIModal({
               )}
 
               <div ref={messagesEndRef} />
+            </div>
+
+            {/* Interactive Follow-up / Continue Input at the bottom of the conversation card */}
+            <div className="border-t border-sloth-border/70 bg-sloth-surface/40 p-2.5 space-y-2">
+              {/* Quick continuation chips */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                <button
+                  onClick={() => handleContinue()}
+                  disabled={isGenerating}
+                  className="flex items-center gap-1 rounded-full border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 font-medium text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 transition cursor-pointer disabled:opacity-40"
+                >
+                  <Play size={9} className="fill-current" />
+                  <span>Continue</span>
+                </button>
+                <button
+                  onClick={() => handleSendMessage('Brainstorm 5 ideas for this')}
+                  disabled={isGenerating}
+                  className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel px-2 py-0.5 text-sloth-subtle hover:text-sloth-text transition cursor-pointer disabled:opacity-40"
+                >
+                  <span>💡 Brainstorm</span>
+                </button>
+                <button
+                  onClick={() => handleSendMessage('Summarize this note')}
+                  disabled={isGenerating}
+                  className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel px-2 py-0.5 text-sloth-subtle hover:text-sloth-text transition cursor-pointer disabled:opacity-40"
+                >
+                  <span>📝 Summarize</span>
+                </button>
+                <button
+                  onClick={() => handleSendMessage('Extract all action items')}
+                  disabled={isGenerating}
+                  className="flex items-center gap-1 rounded-full border border-sloth-border/80 bg-sloth-panel px-2 py-0.5 text-sloth-subtle hover:text-sloth-text transition cursor-pointer disabled:opacity-40"
+                >
+                  <span>📋 Action items</span>
+                </button>
+              </div>
+
+              {/* Follow-up / reply input bar */}
+              <div className="flex items-center gap-2 rounded-full border border-sloth-border/80 bg-sloth-panel px-3 py-1.5 focus-within:border-purple-500/70 focus-within:ring-2 focus-within:ring-purple-500/20 transition-all shadow-xs">
+                <input
+                  ref={bottomInputRef}
+                  type="text"
+                  value={bottomPrompt}
+                  onChange={(e) => setBottomPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (bottomPrompt.trim() && !isGenerating) {
+                        handleSendMessage(bottomPrompt.trim());
+                        setBottomPrompt('');
+                      }
+                    }
+                  }}
+                  placeholder="Ask a follow-up, tell AI what to do next, or type 'continue'..."
+                  disabled={isGenerating}
+                  className="flex-1 bg-transparent text-xs text-sloth-text outline-none placeholder:text-sloth-subtle leading-relaxed"
+                />
+                <button
+                  onClick={() => {
+                    if (bottomPrompt.trim() && !isGenerating) {
+                      handleSendMessage(bottomPrompt.trim());
+                      setBottomPrompt('');
+                    }
+                  }}
+                  disabled={!bottomPrompt.trim() || isGenerating}
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition cursor-pointer ${
+                    bottomPrompt.trim() && !isGenerating
+                      ? 'bg-purple-600 text-white shadow-xs hover:bg-purple-500'
+                      : 'bg-sloth-surface border border-sloth-border/60 text-sloth-subtle opacity-40'
+                  }`}
+                  title="Send follow-up (Enter)"
+                >
+                  <ArrowUp size={12} strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
           </div>
         )}
