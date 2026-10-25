@@ -116,11 +116,11 @@ export const SLASH_COMMANDS: CommandItem[] = [
   {
     id: 'quote',
     title: 'Quote',
-    description: 'Capture an accented blockquote',
-    badge: '"',
+    description: 'Capture a quote with vertical line',
+    badge: '|',
     category: 'Basic Blocks',
-    icon: <Quote size={16} className="text-indigo-400" />,
-    keywords: ['quote', 'blockquote', 'cite'],
+    icon: <Quote size={16} className="text-yellow-500" />,
+    keywords: ['quote', 'blockquote', 'cite', '|', 'vertical', 'line', 'bar', 'empty quote'],
   },
   {
     id: 'callout',

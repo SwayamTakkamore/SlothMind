@@ -292,10 +292,15 @@ button:hover .sloth-hover-hint {
 }
 
 .tiptap blockquote {
-  border-left: 3px solid rgb(var(--sloth-accent));
-  padding-left: 1rem;
+  border-left: 3px solid rgb(var(--sloth-text));
+  padding-left: 0.85rem;
   margin: 0.75rem 0;
-  font-style: italic;
+  color: rgb(var(--sloth-text));
+}
+
+.tiptap blockquote p.is-empty::before,
+.tiptap blockquote.is-empty::before {
+  font-style: normal;
   color: rgb(var(--sloth-subtle));
 }
 
@@ -443,7 +448,10 @@ button:hover .sloth-hover-hint {
   opacity: 0.8;
 }
 
-.tiptap p.is-editor-empty:first-child::before {
+.tiptap p.is-editor-empty:first-child::before,
+.tiptap blockquote p.is-empty::before,
+.tiptap blockquote.is-empty::before,
+.tiptap [data-placeholder]:not([data-placeholder=""]).is-empty::before {
   color: rgb(var(--sloth-subtle));
   content: attr(data-placeholder);
   float: left;

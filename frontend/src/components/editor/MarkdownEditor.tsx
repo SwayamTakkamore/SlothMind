@@ -199,9 +199,9 @@ const DynamicMarkdownRules = Extension.create({
             .run();
         },
       }),
-      // Typing '" ' at start of line creates blockquote
+      // Typing '| ' or '" ' at start of line creates Quote block (vertical line with 'Empty quote')
       new InputRule({
-        find: /^"\s$/,
+        find: /^(?:\||")\s$/,
         handler: ({ chain, range }) => {
           chain()
             .deleteRange(range)
@@ -711,8 +711,30 @@ export function MarkdownEditor({
       }),
       DynamicMarkdownRules,
       Placeholder.configure({
-        placeholder: "Type '/' for commands, '#' for Heading, '---' for Divider, or Ctrl+J for Sloth AI...",
+        includeChildren: true,
+        placeholder: ({ editor: currentEditor, node, pos }) => {
+          if (node.type.name === 'blockquote') {
+            return 'Empty quote';
+          }
+          try {
+            const $pos = currentEditor.state.doc.resolve(pos);
+            if ($pos.parent && $pos.parent.type.name === 'blockquote') {
+              return 'Empty quote';
+            }
+            if (node.type.name === 'heading') {
+              const level = node.attrs.level || 1;
+              return `Heading ${level}`;
+            }
+          } catch {
+            // ignore resolve edge cases
+          }
+          if (currentEditor.isEmpty) {
+            return "Type '/' for commands, '#' for Heading, '| ' for Quote, '---' for Divider, or Ctrl+J for Sloth AI...";
+          }
+          return '';
+        },
         emptyEditorClass: 'is-editor-empty',
+        emptyNodeClass: 'is-empty',
       }),
       Markdown.configure({
         html: true,
@@ -968,6 +990,14 @@ export function MarkdownEditor({
             event.preventDefault();
             editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
             editor.commands.setHorizontalRule();
+            return true;
+          }
+
+          // Quote block shortcuts: '|' or '"' alone on a line + Enter creates a Quote block
+          if (currentLineText === '|' || currentLineText === '"') {
+            event.preventDefault();
+            editor.commands.deleteRange({ from: $from.start(), to: $from.end() });
+            editor.commands.toggleBlockquote();
             return true;
           }
 
@@ -1613,7 +1643,7 @@ export function MarkdownEditor({
                 ? 'bg-sloth-accent/20 text-sloth-accent shadow-sm'
                 : 'text-sloth-subtle hover:bg-sloth-surface hover:text-sloth-text'
             }`}
-            title="Blockquote (Type '> ' or '/quote')"
+            title="Quote / Blockquote (Type '| ' or '> ' or '/quote')"
           >
             <Quote size={13} />
           </button>
